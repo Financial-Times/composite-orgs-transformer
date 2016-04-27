@@ -1,8 +1,9 @@
 *.exe*
-*-config.json
-*.log
 *.html
 *coverage.*
 *.iml
 .idea/
 *.xlsx
+*.db
+*.lock
+~*
