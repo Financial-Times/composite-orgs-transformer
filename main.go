@@ -38,16 +38,19 @@ func main() {
 		Name:  "concordance-xlsx",
 		Value: "",
 		Desc:  "Filename for concordance xlsx",
+		EnvVar: "CONCORDANCE_URL",
 	})
 	v1URL := app.String(cli.StringOpt{
 		Name:  "v1-transformer-url",
 		Value: "",
 		Desc:  "URL for v1 organisations transformer",
+		EnvVar: "V1_TRANSFORMER_URL",
 	})
 	fsURL := app.String(cli.StringOpt{
 		Name:  "fs-transformer-url",
 		Value: "",
 		Desc:  "URL for factset organisations transformer",
+		EnvVar: "FS_TRANSFORMER_URL",
 	})
 	port := app.Int(cli.IntOpt{
 		Name:   "port",

@@ -125,6 +125,13 @@ func (ol *orgLister) loadCombinedOrgs(db *bolt.DB) error {
 		ol.combineOrganisations(combineOrgChan, fsUUIDs, v1UUIDs, errs)
 	}()
 	var wg sync.WaitGroup
+	var maxNbConcurrentGoroutines = 100000
+	concurrentGoroutines := make(chan struct{}, maxNbConcurrentGoroutines)
+	defer close(concurrentGoroutines)
+	// Fill the dummy channel with maxNbConcurrentGoroutines empty struct.
+	for i := 0; i < maxNbConcurrentGoroutines; i++ {
+		concurrentGoroutines <- struct{}{}
+	}
 	for {
 		select {
 		case err := <-errs:
@@ -139,21 +146,26 @@ func (ol *orgLister) loadCombinedOrgs(db *bolt.DB) error {
 				return nil
 			}
 			//TODO remove debugging section
-			if len(ol.list)%1000 == 1 {
-				fmt.Printf("Progress: %v\n", len(ol.list))
+			if len(ol.list)%5000 == 1 {
+				fmt.Printf("Progress: %v", len(ol.list))
 			}
 			ol.list = append(ol.list, listEntry{fmt.Sprintf("%s/%s", ol.baseURI, combinedOrgResult.CanonicalUuid)})
 
 			wg.Add(1)
-			go storeOrgToCache(db, combinedOrgResult, &wg)
+			go storeOrgToCache(db, combinedOrgResult, &wg, concurrentGoroutines)
+			<-concurrentGoroutines
 
 		}
 	}
 
 }
 
-func storeOrgToCache(db *bolt.DB, combinedOrgResult *combinedOrg, wg *sync.WaitGroup) {
+func storeOrgToCache(db *bolt.DB, combinedOrgResult *combinedOrg, wg *sync.WaitGroup, limitGoroutinesChannel chan<- struct{}) {
 	defer wg.Done()
+	defer func(limitGoroutinesChannel chan<- struct{}) {
+		//log.Printf("Channel write")
+		limitGoroutinesChannel <- struct {}{}
+	}(limitGoroutinesChannel)
 	err := db.Batch(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(CACHE_BUCKET))
 		if bucket == nil {
@@ -207,9 +219,9 @@ func fetchUUIDs(listEndpoint string, UUIDs chan<- string, errs chan<- error) {
 		UUIDs <- uuid
 		//TODO delete this debug section if you can handle 5 million entries
 		count++
-		if count > 5000 {
-			break
-		}
+		//if count > 5000 {
+		//	break
+		//}
 	}
 
 	close(UUIDs)
