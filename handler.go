@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
 	"net/http"
-	"github.com/boltdb/bolt"
 	"time"
-	"sync"
 )
 
 const CACHE_BUCKET = "combinedorg"
@@ -67,7 +66,7 @@ func (ol *orgLister) getOrgByUUID(writer http.ResponseWriter, r *http.Request) {
 	}
 	if org.CanonicalUuid != uuid {
 		log.Printf("uuid %v is not the canonical one: %v", uuid, org.CanonicalUuid)
-		writer.Header().Add("Location", ol.baseURI + "/" + org.CanonicalUuid)
+		writer.Header().Add("Location", ol.baseURI+"/"+org.CanonicalUuid)
 		writer.WriteHeader(http.StatusMovedPermanently)
 		return
 	}
@@ -101,11 +100,11 @@ func (orgHandler *orgLister) load() {
 
 		err = orgHandler.concorder.load()
 		if err != nil {
-			log.Errorf("ERROR: %+v", err)  //TODO how to handle?
+			log.Errorf("ERROR: %+v", err) //TODO how to handle?
 		}
 		err = orgHandler.loadCombinedOrgs(db)
 		if err != nil {
-			log.Errorf("ERROR: %+v", err)   //TODO how to handle?
+			log.Errorf("ERROR: %+v", err) //TODO how to handle?
 		}
 	}()
 }
@@ -124,48 +123,29 @@ func (ol *orgLister) loadCombinedOrgs(db *bolt.DB) error {
 		log.Printf("DEBUG - Combining results")
 		ol.combineOrganisations(combineOrgChan, fsUUIDs, v1UUIDs, errs)
 	}()
-	var wg sync.WaitGroup
-	var maxNbConcurrentGoroutines = 100000
-	concurrentGoroutines := make(chan struct{}, maxNbConcurrentGoroutines)
-	defer close(concurrentGoroutines)
-	// Fill the dummy channel with maxNbConcurrentGoroutines empty struct.
-	for i := 0; i < maxNbConcurrentGoroutines; i++ {
-		concurrentGoroutines <- struct{}{}
-	}
 	for {
 		select {
 		case err := <-errs:
 			log.Errorf("Oh no! %+v", err.Error())
 			return err
 		case combinedOrgResult, ok := <-combineOrgChan:
-
 			if !ok {
-				log.Printf("DEBUG - Finished composite org load: %v values. Waiting for subroutines to terminate", len(ol.list))
-				wg.Wait()
-				log.Printf("DEBUG - Finished waiting")
-				return nil
+				break
 			}
-			//TODO remove debugging section
 			if len(ol.list)%5000 == 1 {
 				fmt.Printf("Progress: %v", len(ol.list))
 			}
 			ol.list = append(ol.list, listEntry{fmt.Sprintf("%s/%s", ol.baseURI, combinedOrgResult.CanonicalUuid)})
 
-			wg.Add(1)
-			go storeOrgToCache(db, combinedOrgResult, &wg, concurrentGoroutines)
-			<-concurrentGoroutines
-
+			storeOrgToCache(db, combinedOrgResult)
 		}
 	}
+	log.Printf("Finished composite org load: %v values. Waiting for subroutines to terminate", len(ol.list))
+	return nil
 
 }
 
-func storeOrgToCache(db *bolt.DB, combinedOrgResult *combinedOrg, wg *sync.WaitGroup, limitGoroutinesChannel chan<- struct{}) {
-	defer wg.Done()
-	defer func(limitGoroutinesChannel chan<- struct{}) {
-		//log.Printf("Channel write")
-		limitGoroutinesChannel <- struct {}{}
-	}(limitGoroutinesChannel)
+func storeOrgToCache(db *bolt.DB, combinedOrgResult *combinedOrg) {
 	err := db.Batch(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(CACHE_BUCKET))
 		if bucket == nil {
@@ -190,11 +170,10 @@ func storeOrgToCache(db *bolt.DB, combinedOrgResult *combinedOrg, wg *sync.WaitG
 		return err
 	})
 	if err != nil {
-		log.Errorf("ERROR store: %+v", err)  //TODO how to handle?
+		log.Errorf("ERROR store: %+v", err) //TODO how to handle?
 	}
 
 }
-
 
 func fetchUUIDs(listEndpoint string, UUIDs chan<- string, errs chan<- error) {
 	log.Printf("Starting fetching entries for %v", listEndpoint)
