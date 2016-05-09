@@ -7,11 +7,13 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
 	"net/http"
+	"sync"
 	"time"
 )
 
-const CACHE_BUCKET = "combinedorg"
-const CACHE_FILE_NAME = "cache.db"
+const cacheBucket = "combinedorg"
+const cacheFileName = "cache.db"
+const uppIdentifier = "http://api.ft.com/system/FT-UPP"
 
 type orgLister struct {
 	fsURL            string
@@ -23,31 +25,30 @@ type orgLister struct {
 }
 
 // /organisations endpoint
-func (ol *orgLister) getAllOrgs(w http.ResponseWriter, r *http.Request) {
-	if len(ol.list) == 0 {
+func (orgHandler *orgLister) getAllOrgs(w http.ResponseWriter, r *http.Request) {
+	if len(orgHandler.list) == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	writeJSONResponse(ol.list, w)
+	writeJSONResponse(orgHandler.list, w)
 }
 
 // /organisations/{uuid} endpoint
-func (ol *orgLister) getOrgByUUID(writer http.ResponseWriter, r *http.Request) {
+func (orgHandler *orgLister) getOrgByUUID(writer http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
-	db, err := bolt.Open(CACHE_FILE_NAME, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		log.Fatal(err) //TODO how to handle?
 	}
 	defer db.Close()
 	var cachedValue []byte
 	err = db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(CACHE_BUCKET))
+		bucket := tx.Bucket([]byte(cacheBucket))
 		if bucket == nil {
-			return fmt.Errorf("Bucket %v not found!", CACHE_BUCKET)
+			return fmt.Errorf("Bucket %v not found!", cacheBucket)
 		}
-
 		cachedValue = bucket.Get([]byte(uuid))
 		return nil
 	})
@@ -64,34 +65,26 @@ func (ol *orgLister) getOrgByUUID(writer http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if org.CanonicalUuid != uuid {
-		log.Printf("uuid %v is not the canonical one: %v", uuid, org.CanonicalUuid)
-		writer.Header().Add("Location", ol.baseURI+"/"+org.CanonicalUuid)
+	if org.UUID != uuid {
+		log.Printf("Uuid %v is not the canonical one: %v", uuid, org.UUID)
+		writer.Header().Add("Location", orgHandler.baseURI+"/"+org.UUID)
 		writer.WriteHeader(http.StatusMovedPermanently)
 		return
 	}
-	log.Printf("%+v", org)
 	writeJSONResponse(org, writer)
-}
-
-// /reload endpoint
-func (orgHandler *orgLister) reload(writer http.ResponseWriter, r *http.Request) {
-	//TODO reset before; do we actually need this endpoint?
-	orgHandler.load()
-	writer.WriteHeader(http.StatusAccepted)
 }
 
 func (orgHandler *orgLister) load() {
 	go func() {
-		db, err := bolt.Open(CACHE_FILE_NAME, 0600, &bolt.Options{Timeout: 1 * time.Second})
+		db, err := bolt.Open(cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer db.Close()
 		err = db.Update(func(tx *bolt.Tx) error {
-			tx.DeleteBucket([]byte(CACHE_BUCKET))
+			tx.DeleteBucket([]byte(cacheBucket))
 
-			_, err = tx.CreateBucket([]byte(CACHE_BUCKET))
+			_, err = tx.CreateBucket([]byte(cacheBucket))
 			if err != nil {
 				return err
 			}
@@ -109,20 +102,24 @@ func (orgHandler *orgLister) load() {
 	}()
 }
 
-func (ol *orgLister) loadCombinedOrgs(db *bolt.DB) error {
-	fsUUIDs := make(chan string)
-	v1UUIDs := make(chan string)
+func (orgHandler *orgLister) loadCombinedOrgs(db *bolt.DB) error {
+	fsOrgs := make(chan combinedOrg)
+	v1Orgs := make(chan combinedOrg)
 	errs := make(chan error, 3)
 
-	go fetchUUIDs(ol.fsURL, fsUUIDs, errs)
-	go fetchUUIDs(ol.v1URL, v1UUIDs, errs)
+	go fetchAllOrgsFromURL(orgHandler.fsURL, fsOrgs, errs)
+	go fetchAllOrgsFromURL(orgHandler.v1URL, v1Orgs, errs)
 
 	combineOrgChan := make(chan *combinedOrg)
 
 	go func() {
 		log.Printf("DEBUG - Combining results")
-		ol.combineOrganisations(combineOrgChan, fsUUIDs, v1UUIDs, errs)
+		orgHandler.combineOrganisations(combineOrgChan, fsOrgs, v1Orgs, errs)
 	}()
+
+	combinedOrgCache := make(map[string]*combinedOrg)
+	threshold := 100000
+	var wg sync.WaitGroup
 	for {
 		select {
 		case err := <-errs:
@@ -130,44 +127,78 @@ func (ol *orgLister) loadCombinedOrgs(db *bolt.DB) error {
 			return err
 		case combinedOrgResult, ok := <-combineOrgChan:
 			if !ok {
-				break
+				log.Printf("Almost done. Waiting for subroutines to terminate")
+				storeOrgToCache(db, combinedOrgCache, nil)
+				wg.Wait()
+				for k := range combinedOrgCache {
+					delete(combinedOrgCache, k)
+				}
+				log.Printf("Finished composite org load: %v values", len(orgHandler.list))
+				return nil
 			}
-			if len(ol.list)%5000 == 1 {
-				fmt.Printf("Progress: %v", len(ol.list))
+			if len(orgHandler.list)%5000 == 1 {
+				fmt.Printf("Progress: %v", len(orgHandler.list))
 			}
-			ol.list = append(ol.list, listEntry{fmt.Sprintf("%s/%s", ol.baseURI, combinedOrgResult.CanonicalUuid)})
+			orgHandler.list = append(orgHandler.list, listEntry{fmt.Sprintf("%s/%s", orgHandler.baseURI, combinedOrgResult.UUID)})
+			combinedOrgCache[combinedOrgResult.UUID] = combinedOrgResult
 
-			storeOrgToCache(db, combinedOrgResult)
+			if len(combinedOrgCache) > threshold {
+				wg.Add(1)
+				log.Printf("Added: %+v\n", wg)
+				copyOfCombinedOrgCache := make(map[string]*combinedOrg)
+				for k, v := range combinedOrgCache {
+					copyOfCombinedOrgCache[k] = v
+					delete(combinedOrgCache, k)
+				}
+				go storeOrgToCache(db, copyOfCombinedOrgCache, &wg)
+				combinedOrgCache = make(map[string]*combinedOrg)
+			}
+
 		}
 	}
-	log.Printf("Finished composite org load: %v values. Waiting for subroutines to terminate", len(ol.list))
-	return nil
 
 }
 
-func storeOrgToCache(db *bolt.DB, combinedOrgResult *combinedOrg) {
+func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *sync.WaitGroup) {
+	start := time.Now()
+	if wg != nil {
+		defer func(startTime time.Time) {
+			log.Printf("Done, elapsed time: %+v, size: %v\n", time.Since(startTime), len(cacheToBeWritten))
+			wg.Done()
+		}(start)
+	} else {
+		defer func(startTime time.Time) {
+			log.Printf("Done, elapsed time: %+v, size: %v\n", time.Since(startTime), len(cacheToBeWritten))
+		}(start)
+	}
+
 	err := db.Batch(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(CACHE_BUCKET))
+
+		bucket := tx.Bucket([]byte(cacheBucket))
 		if bucket == nil {
-			return fmt.Errorf("Bucket %v not found!", CACHE_BUCKET)
+			return fmt.Errorf("Bucket %v not found!", cacheBucket)
 		}
-		marshalledCombinedOrg, err := json.Marshal(combinedOrgResult)
-		if err != nil {
-			return err
-		}
-		err = bucket.Put([]byte(combinedOrgResult.CanonicalUuid), marshalledCombinedOrg)
-		if err != nil {
-			return err
-		}
-		if combinedOrgResult.AliasUuids != nil {
-			for _, uuid := range combinedOrgResult.AliasUuids {
-				err = bucket.Put([]byte(uuid), marshalledCombinedOrg)
-				if err != nil {
-					return err
+		for _, combinedOrgResult := range cacheToBeWritten {
+			marshalledCombinedOrg, err := json.Marshal(combinedOrgResult)
+			if err != nil {
+				return err
+			}
+			err = bucket.Put([]byte(combinedOrgResult.UUID), marshalledCombinedOrg)
+			if err != nil {
+				return err
+			}
+			if combinedOrgResult.Identifiers != nil && len(combinedOrgResult.Identifiers) > 0 {
+				for _, identifierVal := range combinedOrgResult.Identifiers {
+					if identifierVal.Authority == uppIdentifier {
+						err = bucket.Put([]byte(identifierVal.IdentifierValue), marshalledCombinedOrg)
+						if err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
-		return err
+		return nil
 	})
 	if err != nil {
 		log.Errorf("ERROR store: %+v", err) //TODO how to handle?
@@ -175,7 +206,7 @@ func storeOrgToCache(db *bolt.DB, combinedOrgResult *combinedOrg) {
 
 }
 
-func fetchUUIDs(listEndpoint string, UUIDs chan<- string, errs chan<- error) {
+func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- combinedOrg, errs chan<- error) {
 	log.Printf("Starting fetching entries for %v", listEndpoint)
 	resp, err := httpClient.Get(listEndpoint)
 	if err != nil {
@@ -191,74 +222,148 @@ func fetchUUIDs(listEndpoint string, UUIDs chan<- string, errs chan<- error) {
 		return
 	}
 	log.Printf("Fetched %v entries for %v\n", len(list), listEndpoint)
-	count := 0
-	for _, listEntry := range list {
-		uuid := uuidRegex.FindString(listEntry.ApiUrl)
-		//log.Print(uuid + " ")
-		UUIDs <- uuid
+	//count := 0
+	//TODO trying to avoid server overload
+	var wg sync.WaitGroup
+	var maxNbConcurrentGoroutines = 10
+	concurrentGoroutines := make(chan struct{}, maxNbConcurrentGoroutines)
+	defer close(concurrentGoroutines)
+	// Fill the dummy channel with maxNbConcurrentGoroutines empty struct.
+	for i := 0; i < maxNbConcurrentGoroutines; i++ {
+		concurrentGoroutines <- struct{}{}
+	}
+	for _, entry := range list {
+		wg.Add(1)
+		go fetchOrgFromURL(entry.APIURL, orgs, errs, &wg, concurrentGoroutines)
+		<-concurrentGoroutines
 		//TODO delete this debug section if you can handle 5 million entries
-		count++
-		//if count > 5000 {
+		//count++
+		//if count > 10000 {
 		//	break
 		//}
 	}
-
-	close(UUIDs)
+	wg.Wait()
+	close(orgs)
 }
 
-func (ol *orgLister) combineOrganisations(combineOrgChan chan *combinedOrg, fsUUIDs chan string, v1UUIDs chan string, errs chan error) {
+func fetchOrgFromURL(url string, orgs chan<- combinedOrg, errs chan<- error, wg *sync.WaitGroup, limitGoroutinesChannel chan<- struct{}) {
+	defer wg.Done()
+	defer func(limitGoroutinesChannel chan<- struct{}) {
+		limitGoroutinesChannel <- struct{}{}
+	}(limitGoroutinesChannel)
+	time.Sleep(50)
+	retryCount := 0
+	var resp *http.Response
+	var err error
+	for {
+		resp, err = httpClient.Get(url)
+		if err != nil && retryCount > 2 {
+			// TODO time="2016-05-09T11:06:32+03:00" level=error msg="Oh no!
+			// Get http://ftaps39408-law1a-eu-p.osb.ft.com/transformers/organisations/1fa8b7c5-60a7-3ba3-9e7f-5269fd96829d:
+			// dial tcp 10.170.37.194:80: bind: An operation on a socket could not be performed because the system
+			// lacked sufficient buffer space or because a queue was full."
+			errs <- err
+			return
+		}
+		if err != nil {
+			log.Warnf("Error appeared to get %v, retrying\n", url)
+			retryCount++
+			continue
+		}
+		break
+	}
+	defer resp.Body.Close()
+	var org combinedOrg
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&org); err != nil {
+		log.Errorf("Error decoding response from %v, response: %+v\n", url, resp)
+		errs <- err
+		return
+	}
+	orgs <- org
+}
+
+func (orgHandler *orgLister) combineOrganisations(combineOrgChan chan *combinedOrg, fsOrgs chan combinedOrg, v1Orgs chan combinedOrg, errs chan error) {
 	fsDone := false
 	v1Done := false
 	for fsDone != true || v1Done != true {
 		select {
-		case fsUUID, ok := <-fsUUIDs:
+		case fsOrg, ok := <-fsOrgs:
 			if !ok {
 				fsDone = true
 			} else {
-				v1UUID, found, err := ol.concorder.v2tov1(fsUUID)
-				if err != nil {
-					errs <- err
-					return
-				}
-				if !found {
-					combineOrgChan <- &combinedOrg{CanonicalUuid: fsUUID}
-				} else {
-					alternateUUIDArray := make([]string, 0)
-					for uuidString := range v1UUID {
-						alternateUUIDArray = append(alternateUUIDArray, uuidString)
-					}
-					//TODO fix this, sometimes alternative uuids are the same as canonical ones
-					alternateUUIDArray = append(alternateUUIDArray, fsUUID)
-					canonicalUuid, indexOfCanonicalUuid := canonical(alternateUUIDArray...)
-					alternateUUIDArray = append(alternateUUIDArray[:indexOfCanonicalUuid], alternateUUIDArray[indexOfCanonicalUuid+1:]...)
-					combineOrgChan <- &combinedOrg{CanonicalUuid: canonicalUuid, AliasUuids: alternateUUIDArray}
-				}
+				orgHandler.handleFsOrg(fsOrg, combineOrgChan, errs)
 			}
-		case v1UUID, ok := <-v1UUIDs:
+		case v1Org, ok := <-v1Orgs:
 			if !ok {
 				v1Done = true
 			} else {
-				fsUUID, err := ol.concorder.v1tov2(v1UUID)
-				if err != nil {
-					errs <- err
-					return
-				}
-				if fsUUID == "" {
-					combineOrgChan <- &combinedOrg{CanonicalUuid: v1UUID}
-				} else {
-					canonicalUuid, index := canonical(v1UUID, fsUUID)
-					var alternateUuid = make([]string, 1)
-					if index == 0 {
-						alternateUuid[0] = v1UUID
-					} else {
-						alternateUuid[0] = fsUUID
-					}
-					combineOrgChan <- &combinedOrg{CanonicalUuid: canonicalUuid, AliasUuids: alternateUuid}
-				}
+				orgHandler.handleV1Org(v1Org, combineOrgChan, errs)
 			}
 		}
 	}
+	log.Printf("Out from the loop")
 	close(combineOrgChan)
+}
+
+func (orgHandler *orgLister) handleFsOrg(fsOrg combinedOrg, combineOrgChan chan *combinedOrg, errs chan error) {
+	v1UUID, found, err := orgHandler.concorder.v2tov1(fsOrg.UUID)
+	if err != nil {
+		errs <- err
+		return
+	}
+	if !found {
+		combineOrgChan <- &fsOrg
+	} else {
+		combineOrgFromFs(&fsOrg, v1UUID)
+		combineOrgChan <- &fsOrg
+	}
+}
+
+func (orgHandler *orgLister) handleV1Org(v1Org combinedOrg, combineOrgChan chan *combinedOrg, errs chan error) {
+	fsUUID, err := orgHandler.concorder.v1tov2(v1Org.UUID)
+	if err != nil {
+		errs <- err
+		return
+	}
+	if fsUUID == "" {
+		combineOrgChan <- &v1Org
+	} else {
+		combineOrgFromV1(&v1Org, fsUUID)
+		combineOrgChan <- &v1Org
+	}
+}
+
+func combineOrgFromFs(fsOrg *combinedOrg, v1UUID map[string]struct{}) {
+	var uuids []string
+	for uuidString := range v1UUID {
+		uuids = append(uuids, uuidString)
+	}
+	uuids = append(uuids, fsOrg.UUID)
+
+	canonicalUUID, indexOfCanonicalUUID := canonical(uuids...)
+	fsOrg.UUID = canonicalUUID
+	for i := 0; i < len(uuids); i++ {
+		if i == indexOfCanonicalUUID {
+			continue
+		}
+		fsOrg.Identifiers = append(fsOrg.Identifiers,
+			identifier{Authority: uppIdentifier, IdentifierValue: uuids[i]})
+
+	}
+}
+
+func combineOrgFromV1(v1Org *combinedOrg, fsUUID string) {
+	canonicalUUID, indexOfCanonicalUUID := canonical(v1Org.UUID, fsUUID)
+	var alternateUUID string
+	if indexOfCanonicalUUID == 0 {
+		alternateUUID = v1Org.UUID
+	} else {
+		alternateUUID = fsUUID
+	}
+
+	v1Org.Identifiers = append(v1Org.Identifiers, identifier{Authority: uppIdentifier, IdentifierValue: alternateUUID})
+	v1Org.UUID = canonicalUUID
 }
 
 func writeJSONResponse(obj interface{}, writer http.ResponseWriter) {

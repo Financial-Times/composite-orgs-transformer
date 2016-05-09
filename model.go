@@ -1,11 +1,26 @@
 package main
 
-//TODO complete model
 type combinedOrg struct {
-	CanonicalUuid string   `json:"canonicalUuid"`
-	AliasUuids    []string `json:"alternativeUuids,omitempty"`
+	UUID                   string       `json:"uuid"`
+	Type                   string       `json:"type"`
+	ProperName             string       `json:"properName"`
+	LegalName              string       `json:"legalName,omitempty"`
+	ShortName              string       `json:"shortName,omitempty"`
+	HiddenLabel            string       `json:"hiddenLabel,omitempty"`
+	TradeNames             []string     `json:"tradeNames,omitempty"`
+	LocalNames             []string     `json:"localNames,omitempty"`
+	FormerNames            []string     `json:"formerNames,omitempty"`
+	Aliases                []string     `json:"aliases,omitempty"`
+	IndustryClassification string       `json:"industryClassification,omitempty"`
+	ParentOrganisation     string       `json:"parentOrganisation,omitempty"`
+	Identifiers            []identifier `json:"identifiers,omitempty"`
+}
+
+type identifier struct {
+	Authority       string `json:"authority"`
+	IdentifierValue string `json:"identifierValue"`
 }
 
 type listEntry struct {
-	ApiUrl string `json:"apiUrl"`
+	APIURL string `json:"apiUrl"`
 }

@@ -48,18 +48,18 @@ func (c *xlsxConcorder) load() error {
 	var count = 0
 	for _, sheet := range xlFile.Sheets {
 		for _, row := range sheet.Rows {
-
+			//TODO maybe we want other information as well
 			compositeID, err := row.Cells[0].String()
 			if err != nil {
 				log.Fatal(err)
 			}
-			fsId, err := row.Cells[4].String()
+			fsID, err := row.Cells[4].String()
 			if err != nil {
 				return err
 			}
 
 			v1uuid := v1ToUUID(compositeID)
-			v2uuid := v2ToUUID(fsId)
+			v2uuid := v2ToUUID(fsID)
 			uuidSet, found := c.uuidV2toUUIDV1[v2uuid]
 			if !found {
 				uuidSet = make(map[string]struct{})

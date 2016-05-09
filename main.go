@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"regexp"
 	"time"
 )
 
@@ -21,7 +20,6 @@ type concorder interface {
 	load() error
 }
 
-var uuidRegex = regexp.MustCompile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 var httpClient = &http.Client{
 	Transport: &http.Transport{
 		MaxIdleConnsPerHost: 32,
@@ -35,21 +33,21 @@ var httpClient = &http.Client{
 func main() {
 	app := cli.App("composite-organisations-transformer", "A RESTful API for transforming combined organisations")
 	concordanceFile := app.String(cli.StringOpt{
-		Name:  "concordance-xlsx",
-		Value: "",
-		Desc:  "Filename for concordance xlsx",
+		Name:   "concordance-xlsx",
+		Value:  "",
+		Desc:   "Filename for concordance xlsx",
 		EnvVar: "CONCORDANCE_URL",
 	})
 	v1URL := app.String(cli.StringOpt{
-		Name:  "v1-transformer-url",
-		Value: "",
-		Desc:  "URL for v1 organisations transformer",
+		Name:   "v1-transformer-url",
+		Value:  "",
+		Desc:   "URL for v1 organisations transformer",
 		EnvVar: "V1_TRANSFORMER_URL",
 	})
 	fsURL := app.String(cli.StringOpt{
-		Name:  "fs-transformer-url",
-		Value: "",
-		Desc:  "URL for factset organisations transformer",
+		Name:   "fs-transformer-url",
+		Value:  "",
+		Desc:   "URL for factset organisations transformer",
 		EnvVar: "FS_TRANSFORMER_URL",
 	})
 	port := app.Int(cli.IntOpt{
@@ -104,7 +102,6 @@ func runApp(concordanceFile, v1URL, fsURL string, port int, baseURL string) erro
 	router := mux.NewRouter()
 
 	router.HandleFunc("/organisations", orgHandler.getAllOrgs).Methods("GET")
-	router.HandleFunc("/reload", orgHandler.reload).Methods("GET")
 	router.HandleFunc("/organisations/{uuid}", orgHandler.getOrgByUUID).Methods("GET")
 	http.Handle("/", router)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
