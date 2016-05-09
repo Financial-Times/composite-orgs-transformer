@@ -6,6 +6,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -214,7 +216,10 @@ func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- combinedOrg, errs chan
 		return
 	}
 	defer resp.Body.Close()
-
+	defer func() {
+		io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 	var list []listEntry
 	dec := json.NewDecoder(resp.Body)
 	if err := dec.Decode(&list); err != nil {
@@ -268,11 +273,16 @@ func fetchOrgFromURL(url string, orgs chan<- combinedOrg, errs chan<- error, wg 
 		if err != nil {
 			log.Warnf("Error appeared to get %v, retrying\n", url)
 			retryCount++
+			time.Sleep(50)
 			continue
 		}
 		break
 	}
 	defer resp.Body.Close()
+	defer func() {
+		io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 	var org combinedOrg
 	dec := json.NewDecoder(resp.Body)
 	if err := dec.Decode(&org); err != nil {
