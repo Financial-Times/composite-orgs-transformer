@@ -51,7 +51,7 @@ func (c *xlsxConcorder) load() error {
 			//TODO maybe we want other information as well
 			compositeID, err := row.Cells[0].String()
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			fsID, err := row.Cells[4].String()
 			if err != nil {

@@ -30,6 +30,10 @@ var httpClient = &http.Client{
 	},
 }
 
+func init() {
+	log.SetFormatter(new(log.JSONFormatter))
+}
+
 func main() {
 	app := cli.App("composite-organisations-transformer", "A RESTful API for transforming combined organisations")
 	concordanceFile := app.String(cli.StringOpt{
@@ -90,16 +94,19 @@ func runApp(concordanceFile, v1URL, fsURL string, port int, baseURL string) erro
 		uuidV2toUUIDV1: make(map[string]map[string]struct{}),
 	}
 
-	orgHandler := &orgLister{
+	orgService := &orgServiceImpl{
 		fsURL:            fsURL,
 		v1URL:            v1URL,
 		concorder:        con,
 		combinedOrgCache: make(map[string]*combinedOrg),
 		baseURI:          baseURL,
+		initialised:      false,
 	}
 
-	orgHandler.load()
+	go orgService.load()
 	router := mux.NewRouter()
+
+	orgHandler := newOrgsHandler(orgService)
 
 	router.HandleFunc("/organisations", orgHandler.getAllOrgs).Methods("GET")
 	router.HandleFunc("/organisations/{uuid}", orgHandler.getOrgByUUID).Methods("GET")
