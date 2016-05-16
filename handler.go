@@ -40,7 +40,7 @@ func (orgHandler *orgLister) getAllOrgs(w http.ResponseWriter, r *http.Request) 
 func (orgHandler *orgLister) getOrgByUUID(writer http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
-	db, err := bolt.Open(cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(cacheFileName, 0600, &bolt.Options{ReadOnly: true, Timeout: 10 * time.Second})
 	if err != nil {
 		log.Fatal(err) //TODO how to handle?
 	}
@@ -220,6 +220,10 @@ func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- combinedOrg, errs chan
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 	}()
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		//TODO implement retry mechanism
+	}
+
 	var list []listEntry
 	dec := json.NewDecoder(resp.Body)
 	if err := dec.Decode(&list); err != nil {
@@ -230,11 +234,11 @@ func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- combinedOrg, errs chan
 	//count := 0
 	//TODO trying to avoid server overload
 	var wg sync.WaitGroup
-	var maxNbConcurrentGoroutines = 10
-	concurrentGoroutines := make(chan struct{}, maxNbConcurrentGoroutines)
+	var maxNrConcurrentGoroutines = 30
+	concurrentGoroutines := make(chan struct{}, maxNrConcurrentGoroutines)
 	defer close(concurrentGoroutines)
 	// Fill the dummy channel with maxNbConcurrentGoroutines empty struct.
-	for i := 0; i < maxNbConcurrentGoroutines; i++ {
+	for i := 0; i < maxNrConcurrentGoroutines; i++ {
 		concurrentGoroutines <- struct{}{}
 	}
 	for _, entry := range list {
@@ -243,7 +247,7 @@ func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- combinedOrg, errs chan
 		<-concurrentGoroutines
 		//TODO delete this debug section if you can handle 5 million entries
 		//count++
-		//if count > 10000 {
+		//if count > 50000 {
 		//	break
 		//}
 	}
@@ -256,24 +260,20 @@ func fetchOrgFromURL(url string, orgs chan<- combinedOrg, errs chan<- error, wg 
 	defer func(limitGoroutinesChannel chan<- struct{}) {
 		limitGoroutinesChannel <- struct{}{}
 	}(limitGoroutinesChannel)
-	time.Sleep(50)
+	time.Sleep(50 * time.Millisecond)
 	retryCount := 0
 	var resp *http.Response
 	var err error
 	for {
 		resp, err = httpClient.Get(url)
 		if err != nil && retryCount > 2 {
-			// TODO time="2016-05-09T11:06:32+03:00" level=error msg="Oh no!
-			// Get http://ftaps39408-law1a-eu-p.osb.ft.com/transformers/organisations/1fa8b7c5-60a7-3ba3-9e7f-5269fd96829d:
-			// dial tcp 10.170.37.194:80: bind: An operation on a socket could not be performed because the system
-			// lacked sufficient buffer space or because a queue was full."
 			errs <- err
 			return
 		}
 		if err != nil {
 			log.Warnf("Error appeared to get %v, retrying\n", url)
 			retryCount++
-			time.Sleep(50)
+			time.Sleep(50 * time.Millisecond)
 			continue
 		}
 		break
@@ -283,6 +283,20 @@ func fetchOrgFromURL(url string, orgs chan<- combinedOrg, errs chan<- error, wg 
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 	}()
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		//TODO implement retry mechanism
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		//TODO skip or not?
+		log.Warnf("Organisation went missing for url: %v\n", url)
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		//TODO skip or not?
+		log.Errorf("Calling url %v returned status %v\n", url, resp.StatusCode)
+		errs <- err
+		return
+	}
 	var org combinedOrg
 	dec := json.NewDecoder(resp.Body)
 	if err := dec.Decode(&org); err != nil {
@@ -351,12 +365,9 @@ func combineOrgFromFs(fsOrg *combinedOrg, v1UUID map[string]struct{}) {
 	}
 	uuids = append(uuids, fsOrg.UUID)
 
-	canonicalUUID, indexOfCanonicalUUID := canonical(uuids...)
+	canonicalUUID, _ := canonical(uuids...)
 	fsOrg.UUID = canonicalUUID
 	for i := 0; i < len(uuids); i++ {
-		if i == indexOfCanonicalUUID {
-			continue
-		}
 		fsOrg.Identifiers = append(fsOrg.Identifiers,
 			identifier{Authority: uppIdentifier, IdentifierValue: uuids[i]})
 
@@ -364,15 +375,10 @@ func combineOrgFromFs(fsOrg *combinedOrg, v1UUID map[string]struct{}) {
 }
 
 func combineOrgFromV1(v1Org *combinedOrg, fsUUID string) {
-	canonicalUUID, indexOfCanonicalUUID := canonical(v1Org.UUID, fsUUID)
-	var alternateUUID string
-	if indexOfCanonicalUUID == 0 {
-		alternateUUID = v1Org.UUID
-	} else {
-		alternateUUID = fsUUID
-	}
+	canonicalUUID, _ := canonical(v1Org.UUID, fsUUID)
 
-	v1Org.Identifiers = append(v1Org.Identifiers, identifier{Authority: uppIdentifier, IdentifierValue: alternateUUID})
+	v1Org.Identifiers = append(v1Org.Identifiers, identifier{Authority: uppIdentifier, IdentifierValue: v1Org.UUID})
+	v1Org.Identifiers = append(v1Org.Identifiers, identifier{Authority: uppIdentifier, IdentifierValue: fsUUID})
 	v1Org.UUID = canonicalUUID
 }
 
