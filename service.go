@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
 )
 
 const cacheBucket = "combinedorg"
@@ -31,7 +30,7 @@ type orgServiceImpl struct {
 	combinedOrgCache map[string]*combinedOrg
 	list             []listEntry
 	initialised      bool
-	baseURI string
+	baseURI          string
 }
 
 func (s *orgServiceImpl) getBaseURI() string {
