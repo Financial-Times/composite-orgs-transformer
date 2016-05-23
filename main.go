@@ -36,12 +36,6 @@ func init() {
 
 func main() {
 	app := cli.App("composite-organisations-transformer", "A RESTful API for transforming combined organisations")
-	concordanceFile := app.String(cli.StringOpt{
-		Name:   "concordance-xlsx",
-		Value:  "",
-		Desc:   "Filename for concordance xlsx",
-		EnvVar: "CONCORDANCE_URL",
-	})
 	v1URL := app.String(cli.StringOpt{
 		Name:   "v1-transformer-url",
 		Value:  "",
@@ -68,7 +62,7 @@ func main() {
 	})
 
 	app.Action = func() {
-		if err := runApp(*concordanceFile, *v1URL, *fsURL, *port, *baseURL); err != nil {
+		if err := runApp(*v1URL, *fsURL, *port, *baseURL); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("Started app")
@@ -77,10 +71,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runApp(concordanceFile, v1URL, fsURL string, port int, baseURL string) error {
-	if concordanceFile == "" {
-		return errors.New("concordance file must be provided")
-	}
+func runApp(v1URL, fsURL string, port int, baseURL string) error {
 	if v1URL == "" {
 		return errors.New("v1 Organisation transformer URL must be provided")
 	}
@@ -88,8 +79,8 @@ func runApp(concordanceFile, v1URL, fsURL string, port int, baseURL string) erro
 		return errors.New("Factset Organisation transformer URL must be provided")
 	}
 
-	con := &xlsxConcorder{
-		filename:       concordanceFile,
+	con := &berthaConcorder{
+		client:         httpClient,
 		uuidV1toUUIDV2: make(map[string]string),
 		uuidV2toUUIDV1: make(map[string]map[string]struct{}),
 	}
