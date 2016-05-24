@@ -22,7 +22,7 @@ type concorder interface {
 
 var httpClient = &http.Client{
 	Transport: &http.Transport{
-		MaxIdleConnsPerHost: 32,
+		MaxIdleConnsPerHost: 512,
 		Dial: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -32,6 +32,7 @@ var httpClient = &http.Client{
 
 func init() {
 	log.SetFormatter(new(log.JSONFormatter))
+	log.SetLevel(log.DebugLevel)
 }
 
 func main() {
@@ -97,10 +98,10 @@ func runApp(v1URL, fsURL string, port int, baseURL string) error {
 	go orgService.load()
 	router := mux.NewRouter()
 
-	orgHandler := newOrgsHandler(orgService)
+	orgHandler := newOrgsHandler(orgService, httpClient)
 
-	router.HandleFunc("/organisations", orgHandler.getAllOrgs).Methods("GET")
-	router.HandleFunc("/organisations/{uuid}", orgHandler.getOrgByUUID).Methods("GET")
+	router.HandleFunc("/transformers/organisations", orgHandler.getAllOrgs).Methods("GET")
+	router.HandleFunc("/transformers/organisations/{uuid}", orgHandler.getOrgByUUID).Methods("GET")
 	http.Handle("/", router)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
 		httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), router)))
