@@ -98,7 +98,7 @@ func runApp(v1URL, fsURL string, port int, baseURL string) error {
 	go orgService.load()
 	router := mux.NewRouter()
 
-	orgHandler := newOrgsHandler(orgService, httpClient)
+	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
 
 	router.HandleFunc("/transformers/organisations", orgHandler.getAllOrgs).Methods("GET")
 	router.HandleFunc("/transformers/organisations/{uuid}", orgHandler.getOrgByUUID).Methods("GET")

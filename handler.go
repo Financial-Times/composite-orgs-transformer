@@ -13,10 +13,12 @@ import (
 type orgsHandler struct {
 	service orgsService
 	client  *http.Client
+	v2URL   string
+	v1URL   string
 }
 
-func newOrgsHandler(service orgsService, client *http.Client) orgsHandler {
-	return orgsHandler{service: service, client: client}
+func newOrgsHandler(service orgsService, client *http.Client, v1URL string, v2URL string) orgsHandler {
+	return orgsHandler{service: service, client: client, v1URL: v1URL, v2URL: v2URL}
 }
 
 // /organisations endpoint
@@ -61,9 +63,9 @@ func (orgHandler *orgsHandler) getOrgByUUID(writer http.ResponseWriter, req *htt
 	}
 
 	//fall back to v1/v2 orgs transformers if uuid not concorded
-	ok := orgHandler.streamIfSuccess("https://v2-organisations-transformer-up.ft.com/transformers/organisations/"+uuid, writer)
+	ok := orgHandler.streamIfSuccess(orgHandler.v2URL+uuid, writer)
 	if !ok {
-		ok = orgHandler.streamIfSuccess("http://localhost:8081/transformers/organisations/"+uuid, writer)
+		ok = orgHandler.streamIfSuccess(orgHandler.v1URL+uuid, writer)
 		if !ok {
 			writer.WriteHeader(http.StatusNotFound)
 			return
