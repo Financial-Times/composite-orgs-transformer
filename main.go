@@ -61,9 +61,15 @@ func main() {
 		Desc:   "Base url",
 		EnvVar: "BASE_URL",
 	})
+	cacheFileName := app.String(cli.StringOpt{
+		Name:   "cache-file-name",
+		Value:  "cache.db",
+		Desc:   "Cache file name",
+		EnvVar: "CACHE_FILE_NAME",
+	})
 
 	app.Action = func() {
-		if err := runApp(*v1URL, *fsURL, *port, *baseURL); err != nil {
+		if err := runApp(*v1URL, *fsURL, *port, *baseURL, *cacheFileName); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("Started app")
@@ -72,7 +78,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runApp(v1URL, fsURL string, port int, baseURL string) error {
+func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) error {
 	if v1URL == "" {
 		return errors.New("v1 Organisation transformer URL must be provided")
 	}
@@ -93,6 +99,7 @@ func runApp(v1URL, fsURL string, port int, baseURL string) error {
 		combinedOrgCache: make(map[string]*combinedOrg),
 		baseURI:          baseURL,
 		initialised:      false,
+		cacheFileName:    cacheFile,
 	}
 
 	go orgService.load()

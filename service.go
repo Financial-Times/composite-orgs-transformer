@@ -15,7 +15,6 @@ import (
 
 const (
 	compositeOrgsBucket = "combinedorg"
-	cacheFileName       = "cache.db"
 	uppIdentifier       = "http://api.ft.com/system/FT-UPP"
 )
 
@@ -37,6 +36,7 @@ type orgServiceImpl struct {
 	list             []listEntry
 	initialised      bool
 	baseURI          string
+	cacheFileName    string
 }
 
 func (s *orgServiceImpl) getBaseURI() string {
@@ -55,7 +55,7 @@ func (s *orgServiceImpl) getOrgs() ([]listEntry, bool) {
 }
 
 func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
-	db, err := bolt.Open(cacheFileName, 0600, &bolt.Options{ReadOnly: true, Timeout: 10 * time.Second})
+	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{ReadOnly: true, Timeout: 10 * time.Second})
 	if err != nil {
 		log.Errorf("ERROR opening cache file for [%v]: %v", uuid, err.Error())
 		return combinedOrg{}, false, err
@@ -88,7 +88,7 @@ func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
 }
 
 func (s *orgServiceImpl) load() {
-	db, err := bolt.Open(cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		log.Errorf("ERROR opening cache file for init: %v", err.Error())
 		return
