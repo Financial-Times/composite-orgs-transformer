@@ -69,9 +69,9 @@ func (orgHandler *orgsHandler) getOrgByUUID(writer http.ResponseWriter, req *htt
 	}
 
 	//fall back to v1/v2 orgs transformers if uuid not concorded
-	ok := orgHandler.streamIfSuccess(orgHandler.v2URL+uuid, writer)
+	ok := orgHandler.streamIfSuccess(orgHandler.v2URL+"/"+uuid, writer)
 	if !ok {
-		ok = orgHandler.streamIfSuccess(orgHandler.v1URL+uuid, writer)
+		ok = orgHandler.streamIfSuccess(orgHandler.v1URL+"/"+uuid, writer)
 		if !ok {
 			writer.WriteHeader(http.StatusNotFound)
 			return
