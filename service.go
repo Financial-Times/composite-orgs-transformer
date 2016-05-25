@@ -15,6 +15,7 @@ import (
 
 const (
 	compositeOrgsBucket = "combinedorg"
+	orgsUrlsBucket      = "orgsuris"
 	uppIdentifier       = "http://api.ft.com/system/FT-UPP"
 )
 
@@ -22,7 +23,7 @@ var uuidExtractRegex = regexp.MustCompile(".*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4
 var concurrentGoroutines = make(chan struct{}, 300)
 
 type orgsService interface {
-	getOrgs() ([]listEntry, bool)
+	getOrgs() ([]byte, error)
 	getOrgByUUID(uuid string) (combinedOrg, bool, error)
 	isInitialised() bool
 	getBaseURI() string
@@ -47,11 +48,34 @@ func (s *orgServiceImpl) isInitialised() bool {
 	return s.initialised
 }
 
-func (s *orgServiceImpl) getOrgs() ([]listEntry, bool) {
-	if len(s.list) > 0 {
-		return s.list, true
+func (s *orgServiceImpl) getOrgs() (orgs []byte, err error) {
+	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{ReadOnly: true, Timeout: 10 * time.Second})
+	if err != nil {
+		//log.Errorf("ERROR opening cache file for [%v]: %v", uuid, err.Error())
+		return nil, err
 	}
-	return nil, false
+	defer db.Close()
+	var cachedValue []byte
+	err = db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(orgsUrlsBucket))
+		if bucket == nil {
+			return fmt.Errorf("Bucket %v not found!", orgsUrlsBucket)
+		}
+		cachedValue = bucket.Get([]byte("orgs"))
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	if cachedValue == nil || len(cachedValue) == 0 {
+		log.Infof("INFO No cached value for [%v]", "orgs")
+		return nil, nil
+	}
+	c := make([]byte, len(cachedValue))
+	copy(c, cachedValue)
+
+	return c, nil
 }
 
 func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
@@ -99,11 +123,21 @@ func (s *orgServiceImpl) load() {
 		return
 	}
 
+	if err = createCacheBucket(orgsUrlsBucket, db); err != nil {
+		log.Errorf("ERROR creating orgsUrlsBucket: %v", err.Error())
+		return
+	}
+
 	if err = s.concorder.load(); err != nil {
 		log.Errorf("ERROR loading concordance data: %+v", err.Error())
 		return
 	}
 	if err = s.loadCombinedOrgs(db); err != nil {
+		log.Errorf("ERROR loading combined organisations: %+v", err.Error())
+		return
+	}
+
+	if err = s.storeOrgsUrls(db); err != nil {
 		log.Errorf("ERROR loading combined organisations: %+v", err.Error())
 		return
 	}
@@ -119,6 +153,26 @@ func createCacheBucket(bucketName string, db *bolt.DB) error {
 		}
 		_, err = tx.CreateBucket([]byte(bucketName))
 		return err
+	})
+}
+
+func (orgHandler *orgServiceImpl) storeOrgsUrls(db *bolt.DB) error {
+	return db.Batch(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket([]byte(orgsUrlsBucket))
+		if bucket == nil {
+			return fmt.Errorf("Bucket %v not found!", orgsUrlsBucket)
+		}
+		marshalledOrgsUrls, err := json.Marshal(orgHandler.list)
+		if err != nil {
+			return err
+		}
+		orgHandler.list = nil
+		err = bucket.Put([]byte("orgs"), marshalledOrgsUrls)
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 }
 

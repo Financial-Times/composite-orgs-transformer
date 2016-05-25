@@ -27,13 +27,19 @@ func (orgHandler *orgsHandler) getAllOrgs(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	list, found := orgHandler.service.getOrgs()
+	orgUris, err := orgHandler.service.getOrgs()
 
-	if !found {
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if orgUris == nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	writeJSONResponse(list, w)
+	w.Header().Add("Content-Type", "application/json")
+	w.Write(orgUris)
 }
 
 // /organisations/{uuid} endpoint
