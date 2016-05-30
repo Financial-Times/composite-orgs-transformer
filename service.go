@@ -5,9 +5,6 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
-	"io"
-	"io/ioutil"
-	"net/http"
 	"regexp"
 	"sync"
 	"time"
@@ -34,7 +31,7 @@ type orgServiceImpl struct {
 	fsURL            string
 	v1URL            string
 	concorder        concorder
-	client           httpClient
+	orgsRepo         orgsRepo
 	combinedOrgCache map[string]*combinedOrg
 	list             []listEntry
 	initialised      bool
@@ -285,25 +282,9 @@ func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *
 
 func (s *orgServiceImpl) fetchAllOrgsFromURL(listEndpoint string, orgs chan<- string, errs chan<- error, done <-chan struct{}) {
 	log.Debugf("Starting fetching entries for %v", listEndpoint)
-	resp, err := s.client.Get(listEndpoint)
+	list, err := s.orgsRepo.orgsFromURL(listEndpoint)
 	if err != nil {
 		errs <- err
-		return
-	}
-	defer resp.Body.Close()
-	defer func() {
-		io.Copy(ioutil.Discard, resp.Body)
-		resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
-		errs <- fmt.Errorf("Could not get orgs from %v. Returned %v", listEndpoint, resp.StatusCode)
-	}
-
-	var list []listEntry
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&list); err != nil {
-		errs <- err
-		return
 	}
 	defer close(orgs)
 	for _, entry := range list {
@@ -315,28 +296,11 @@ func (s *orgServiceImpl) fetchAllOrgsFromURL(listEndpoint string, orgs chan<- st
 	}
 }
 
-func (s *orgServiceImpl) fetchOrgFromURL(url string) (combinedOrg, error) {
+func (s *orgServiceImpl) fetchOrgFromURLThrottled(url string) (combinedOrg, error) {
 	defer func(limitGoroutinesChannel chan struct{}) {
 		<-limitGoroutinesChannel
 	}(concurrentGoroutines)
-	resp, err := s.client.Get(url)
-	if err != nil {
-		return combinedOrg{}, fmt.Errorf("Could not connect to %v. Error %v", url, err)
-	}
-	defer func() {
-		io.Copy(ioutil.Discard, resp.Body)
-		resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
-		return combinedOrg{}, fmt.Errorf("Could not get orgs from %v. Returned %v", url, resp.StatusCode)
-	}
-	var org combinedOrg
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&org); err != nil {
-		log.Errorf("Error decoding response from %v, response: %+v\n", url, resp)
-		return combinedOrg{}, fmt.Errorf("Error decoding response from %v, error: %+v", url, err)
-	}
-	return org, nil
+	return s.orgsRepo.orgFromURL(url)
 }
 
 func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, fsOrgs chan string, v1Orgs chan string, errs chan error, done <-chan struct{}) {
@@ -424,7 +388,7 @@ func (s *orgServiceImpl) handleV1Org(v1OrgUUID string, combineOrgChan chan *comb
 func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{}) (combinedOrg, error) {
 	var uuids []string
 	concurrentGoroutines <- struct{}{}
-	v2Org, err := s.fetchOrgFromURL(s.fsURL + "/" + fsOrgUUID)
+	v2Org, err := s.fetchOrgFromURLThrottled(s.fsURL + "/" + fsOrgUUID)
 	if err != nil {
 		return v2Org, err
 	}
