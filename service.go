@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
@@ -21,24 +20,27 @@ const (
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
-var concurrentGoroutines = make(chan struct{}, 300)
+var concurrentGoroutines = make(chan struct{}, 100)
 
 type orgsService interface {
 	getOrgs() ([]byte, error)
 	getOrgByUUID(uuid string) (combinedOrg, bool, error)
 	isInitialised() bool
 	getBaseURI() string
+	count() int
 }
 
 type orgServiceImpl struct {
 	fsURL            string
 	v1URL            string
 	concorder        concorder
+	client           httpClient
 	combinedOrgCache map[string]*combinedOrg
 	list             []listEntry
 	initialised      bool
 	baseURI          string
 	cacheFileName    string
+	c                int
 }
 
 func (s *orgServiceImpl) getBaseURI() string {
@@ -47,6 +49,10 @@ func (s *orgServiceImpl) getBaseURI() string {
 
 func (s *orgServiceImpl) isInitialised() bool {
 	return s.initialised
+}
+
+func (s *orgServiceImpl) count() int {
+	return s.c
 }
 
 func (s *orgServiceImpl) getOrgs() (orgs []byte, err error) {
@@ -69,7 +75,7 @@ func (s *orgServiceImpl) getOrgs() (orgs []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if cachedValue == nil || len(cachedValue) == 0 {
+	if len(cachedValue) == 0 {
 		log.Infof("INFO No cached value for [%v]", "orgs")
 		return nil, nil
 	}
@@ -115,26 +121,26 @@ func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
 func (s *orgServiceImpl) load() error {
 	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
-		return errors.New(fmt.Sprintf("ERROR opening cache file for init: %v", err))
+		return fmt.Errorf("ERROR opening cache file for init: %v", err)
 	}
 	defer db.Close()
 	if err = createCacheBucket(compositeOrgsBucket, db); err != nil {
-		return errors.New(fmt.Sprintf("ERROR creating compositeOrgsBucket: %v", err))
+		return fmt.Errorf("ERROR creating compositeOrgsBucket: %v", err)
 	}
 
 	if err = createCacheBucket(orgsUrlsBucket, db); err != nil {
-		return errors.New(fmt.Sprintf("ERROR creating orgsUrlsBucket: %v", err))
+		return fmt.Errorf("ERROR creating orgsUrlsBucket: %v", err)
 	}
 
 	if err = s.concorder.load(); err != nil {
-		return errors.New(fmt.Sprintf("ERROR loading concordance data: %+v", err))
+		return fmt.Errorf("ERROR loading concordance data: %+v", err)
 	}
 	if err = s.loadCombinedOrgs(db); err != nil {
-		return errors.New(fmt.Sprintf("ERROR loading combined organisations: %+v", err))
+		return fmt.Errorf("ERROR loading combined organisations: %+v", err)
 	}
 
 	if err = s.storeOrgsUrls(db); err != nil {
-		return errors.New(fmt.Sprintf("ERROR loading combined organisations: %+v", err))
+		return fmt.Errorf("ERROR loading combined organisations: %+v", err)
 	}
 
 	s.initialised = true
@@ -152,39 +158,36 @@ func createCacheBucket(bucketName string, db *bolt.DB) error {
 	})
 }
 
-func (orgHandler *orgServiceImpl) storeOrgsUrls(db *bolt.DB) error {
+func (s *orgServiceImpl) storeOrgsUrls(db *bolt.DB) error {
 	return db.Batch(func(tx *bolt.Tx) error {
 
 		bucket := tx.Bucket([]byte(orgsUrlsBucket))
 		if bucket == nil {
 			return fmt.Errorf("Bucket %v not found!", orgsUrlsBucket)
 		}
-		marshalledOrgsUrls, err := json.Marshal(orgHandler.list)
+		marshalledOrgsUrls, err := json.Marshal(s.list)
 		if err != nil {
 			return err
 		}
-		orgHandler.list = nil
+		s.list = nil
 		err = bucket.Put([]byte("orgs"), marshalledOrgsUrls)
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	})
 }
 
 func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 	fsOrgs := make(chan string)
 	v1Orgs := make(chan string)
-	errs := make(chan error, 3)
-
-	go fetchAllOrgsFromURL(s.fsURL, fsOrgs, errs)
-	go fetchAllOrgsFromURL(s.v1URL, v1Orgs, errs)
+	errs := make(chan error)
+	done := make(chan struct{})
+	go s.fetchAllOrgsFromURL(s.fsURL, fsOrgs, errs, done)
+	go s.fetchAllOrgsFromURL(s.v1URL, v1Orgs, errs, done)
 
 	combineOrgChan := make(chan *combinedOrg)
-
+	s.list = make([]listEntry, 1)
 	go func() {
 		log.Debugf("Combining results")
-		s.combineOrganisations(combineOrgChan, fsOrgs, v1Orgs, errs)
+		s.combineOrganisations(combineOrgChan, fsOrgs, v1Orgs, errs, done)
 	}()
 
 	combinedOrgCache := make(map[string]*combinedOrg)
@@ -193,6 +196,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 	for {
 		select {
 		case err := <-errs:
+			close(done)
 			return err
 		case combinedOrgResult, ok := <-combineOrgChan:
 			if !ok {
@@ -203,6 +207,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 					delete(combinedOrgCache, k)
 				}
 				log.Debugf("Finished composite org load: %v values", len(s.list))
+				s.c = len(s.list)
 				return nil
 			}
 			if len(s.list)%100000 == 1 {
@@ -278,9 +283,9 @@ func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *
 
 }
 
-func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- string, errs chan<- error) {
+func (s *orgServiceImpl) fetchAllOrgsFromURL(listEndpoint string, orgs chan<- string, errs chan<- error, done <-chan struct{}) {
 	log.Debugf("Starting fetching entries for %v", listEndpoint)
-	resp, err := httpClient.Get(listEndpoint)
+	resp, err := s.client.Get(listEndpoint)
 	if err != nil {
 		errs <- err
 		return
@@ -290,8 +295,8 @@ func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- string, errs chan<- er
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 	}()
-	if resp.StatusCode == http.StatusServiceUnavailable {
-		//TODO implement retry mechanism
+	if resp.StatusCode != http.StatusOK {
+		errs <- fmt.Errorf("Could not get orgs from %v. Returned %v", listEndpoint, resp.StatusCode)
 	}
 
 	var list []listEntry
@@ -300,65 +305,47 @@ func fetchAllOrgsFromURL(listEndpoint string, orgs chan<- string, errs chan<- er
 		errs <- err
 		return
 	}
-
+	defer close(orgs)
 	for _, entry := range list {
-		orgs <- uuidExtractRegex.FindStringSubmatch(entry.APIURL)[1]
+		select {
+		case orgs <- uuidExtractRegex.FindStringSubmatch(entry.APIURL)[1]:
+		case <-done:
+			return
+		}
 	}
-	close(orgs)
 }
 
 func (s *orgServiceImpl) fetchOrgFromURL(url string) (combinedOrg, error) {
 	defer func(limitGoroutinesChannel chan struct{}) {
 		<-limitGoroutinesChannel
 	}(concurrentGoroutines)
-	retryCount := 0
-	var resp *http.Response
-	var err error
-	for {
-		resp, err = httpClient.Get(url)
-		if err != nil && retryCount > 2 {
-			return combinedOrg{}, err
-		}
-		if err != nil {
-			log.Warnf("Error appeared to get %v, retrying\n", url)
-			retryCount++
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-		break
+	resp, err := s.client.Get(url)
+	if err != nil {
+		return combinedOrg{}, fmt.Errorf("Could not connect to %v. Error %v", url, err)
 	}
-	defer resp.Body.Close()
 	defer func() {
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 	}()
-	if resp.StatusCode == http.StatusServiceUnavailable {
-		//TODO implement retry mechanism
-		return combinedOrg{}, err
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		//TODO skip or not?
-		log.Warnf("Organisation went missing for url: %v\n", url)
-		return combinedOrg{}, err
-	}
 	if resp.StatusCode != http.StatusOK {
-		//TODO skip or not?
-		log.Errorf("Calling url %v returned status %v\n", url, resp.StatusCode)
-		return combinedOrg{}, err
+		return combinedOrg{}, fmt.Errorf("Could not get orgs from %v. Returned %v", url, resp.StatusCode)
 	}
 	var org combinedOrg
 	dec := json.NewDecoder(resp.Body)
 	if err := dec.Decode(&org); err != nil {
 		log.Errorf("Error decoding response from %v, response: %+v\n", url, resp)
-		return combinedOrg{}, err
+		return combinedOrg{}, fmt.Errorf("Error decoding response from %v, error: %+v", url, err)
 	}
 	return org, nil
 }
 
-func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, fsOrgs chan string, v1Orgs chan string, errs chan error) {
+func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, fsOrgs chan string, v1Orgs chan string, errs chan error, done <-chan struct{}) {
 	var cWait sync.WaitGroup
 	fsDone := false
 	v1Done := false
+	defer func() {
+		close(combineOrgChan)
+	}()
 	for !fsDone || !v1Done {
 		select {
 		case fsOrgUUID, ok := <-fsOrgs:
@@ -367,7 +354,7 @@ func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, 
 			} else {
 				cWait.Add(1)
 				go func() {
-					s.handleFsOrg(fsOrgUUID, combineOrgChan, errs)
+					s.handleFsOrg(fsOrgUUID, combineOrgChan, errs, done)
 					cWait.Done()
 				}()
 			}
@@ -377,42 +364,58 @@ func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, 
 			} else {
 				cWait.Add(1)
 				go func() {
-					s.handleV1Org(v1OrgUUID, combineOrgChan, errs)
+					s.handleV1Org(v1OrgUUID, combineOrgChan, errs, done)
 					cWait.Done()
 				}()
 			}
+		case <-done:
+			return
 		}
 	}
 	cWait.Wait()
 	close(concurrentGoroutines)
-	close(combineOrgChan)
 }
 
-func (s *orgServiceImpl) handleFsOrg(fsOrgUUID string, combineOrgChan chan *combinedOrg, errs chan error) {
+func (s *orgServiceImpl) handleFsOrg(fsOrgUUID string, combineOrgChan chan *combinedOrg, errs chan error, done <-chan struct{}) {
 	v1UUID, found, err := s.concorder.v2tov1(fsOrgUUID)
 	if err != nil {
-		errs <- err
-		return
+		select {
+		case errs <- err:
+		default:
+			return
+		}
 	}
+	var org combinedOrg
 	if found {
-		o, err := s.mergeOrgs(fsOrgUUID, v1UUID)
+		org, err = s.mergeOrgs(fsOrgUUID, v1UUID)
 		if err != nil {
 			errs <- err
 		}
-		combineOrgChan <- &o
 	} else {
-		combineOrgChan <- &combinedOrg{UUID: fsOrgUUID}
+		org = combinedOrg{UUID: fsOrgUUID}
+	}
+	select {
+	case combineOrgChan <- &org:
+	case <-done:
+		return
 	}
 }
 
-func (s *orgServiceImpl) handleV1Org(v1OrgUUID string, combineOrgChan chan *combinedOrg, errs chan error) {
+func (s *orgServiceImpl) handleV1Org(v1OrgUUID string, combineOrgChan chan *combinedOrg, errs chan error, done <-chan struct{}) {
 	fsUUID, err := s.concorder.v1tov2(v1OrgUUID)
 	if err != nil {
-		errs <- err
-		return
+		select {
+		case errs <- err:
+		default:
+			return
+		}
 	}
 	if fsUUID == "" {
-		combineOrgChan <- &combinedOrg{UUID: v1OrgUUID}
+		select {
+		case combineOrgChan <- &combinedOrg{UUID: v1OrgUUID}:
+		case <-done:
+			return
+		}
 	}
 }
 
@@ -423,7 +426,7 @@ func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{})
 	concurrentGoroutines <- struct{}{}
 	v2Org, err := s.fetchOrgFromURL(s.fsURL + "/" + fsOrgUUID)
 	if err != nil {
-		return combinedOrg{}, err
+		return v2Org, err
 	}
 
 	for uuidString := range v1UUID {

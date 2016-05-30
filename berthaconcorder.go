@@ -11,14 +11,14 @@ import (
 )
 
 type berthaConcorder struct {
-	client         *http.Client
+	client         httpClient
 	loaded         bool
 	lk             sync.Mutex
 	uuidV2toUUIDV1 map[string]map[string]struct{}
 	uuidV1toUUIDV2 map[string]string
 }
 
-//model
+//Concordance model
 type Concordance struct {
 	CompositeID string `json:"compositeid"`
 	TmeID       string `json:"tmeid"`
@@ -64,7 +64,7 @@ func (b *berthaConcorder) load() error {
 		return errors.New(errMsg)
 	}
 
-	concordances := make([]Concordance, 0)
+	var concordances []Concordance
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
@@ -8,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/rcrowley/go-metrics"
+	"github.com/sethgrid/pester"
 	"net"
 	"net/http"
 	"os"
@@ -20,14 +22,8 @@ type concorder interface {
 	load() error
 }
 
-var httpClient = &http.Client{
-	Transport: &http.Transport{
-		MaxIdleConnsPerHost: 512,
-		Dial: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).Dial,
-	},
+type httpClient interface {
+	Get(url string) (resp *http.Response, err error)
 }
 
 func init() {
@@ -86,6 +82,8 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 		return errors.New("Factset Organisation transformer URL must be provided")
 	}
 
+	httpClient := newResilientClient()
+
 	con := &berthaConcorder{
 		client:         httpClient,
 		uuidV1toUUIDV2: make(map[string]string),
@@ -96,6 +94,7 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 		fsURL:            fsURL,
 		v1URL:            v1URL,
 		concorder:        con,
+		client:           httpClient,
 		combinedOrgCache: make(map[string]*combinedOrg),
 		baseURI:          baseURL,
 		initialised:      false,
@@ -117,10 +116,27 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
 
 	router.HandleFunc("/transformers/organisations", orgHandler.getAllOrgs).Methods("GET")
-	router.HandleFunc("/transformers/organisations/{uuid}", orgHandler.getOrgByUUID).Methods("GET")
+	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})}", orgHandler.getOrgByUUID).Methods("GET")
+	router.HandleFunc("/transformers/organisations/__count", orgHandler.count).Methods("GET")
 	http.Handle("/", router)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
 		httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), router)))
 
 	return err
+}
+
+func newResilientClient() *pester.Client {
+	tr := &http.Transport{
+		MaxIdleConnsPerHost: 128,
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+	}
+	c := &http.Client{
+		Transport: tr,
+		Timeout:   30 * time.Second,
+	}
+	return pester.NewExtendedClient(c)
 }

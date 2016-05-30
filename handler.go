@@ -12,12 +12,12 @@ import (
 
 type orgsHandler struct {
 	service orgsService
-	client  *http.Client
+	client  httpClient
 	v2URL   string
 	v1URL   string
 }
 
-func newOrgsHandler(service orgsService, client *http.Client, v1URL string, v2URL string) orgsHandler {
+func newOrgsHandler(service orgsService, client httpClient, v1URL string, v2URL string) orgsHandler {
 	return orgsHandler{service: service, client: client, v1URL: v1URL, v2URL: v2URL}
 }
 
@@ -77,6 +77,14 @@ func (orgHandler *orgsHandler) getOrgByUUID(writer http.ResponseWriter, req *htt
 			return
 		}
 	}
+}
+
+func (orgHandler *orgsHandler) count(writer http.ResponseWriter, req *http.Request) {
+	if !orgHandler.service.isInitialised() {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	fmt.Fprintf(writer, "%d", orgHandler.service.count())
 }
 
 func (orgHandler *orgsHandler) streamIfSuccess(url string, writer http.ResponseWriter) bool {
