@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
@@ -111,38 +112,33 @@ func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
 	return org, true, nil
 }
 
-func (s *orgServiceImpl) load() {
+func (s *orgServiceImpl) load() error {
 	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
-		log.Errorf("ERROR opening cache file for init: %v", err.Error())
-		return
+		return errors.New(fmt.Sprintf("ERROR opening cache file for init: %v", err))
 	}
 	defer db.Close()
 	if err = createCacheBucket(compositeOrgsBucket, db); err != nil {
-		log.Errorf("ERROR creating compositeOrgsBucket: %v", err.Error())
-		return
+		return errors.New(fmt.Sprintf("ERROR creating compositeOrgsBucket: %v", err))
 	}
 
 	if err = createCacheBucket(orgsUrlsBucket, db); err != nil {
-		log.Errorf("ERROR creating orgsUrlsBucket: %v", err.Error())
-		return
+		return errors.New(fmt.Sprintf("ERROR creating orgsUrlsBucket: %v", err))
 	}
 
 	if err = s.concorder.load(); err != nil {
-		log.Errorf("ERROR loading concordance data: %+v", err.Error())
-		return
+		return errors.New(fmt.Sprintf("ERROR loading concordance data: %+v", err))
 	}
 	if err = s.loadCombinedOrgs(db); err != nil {
-		log.Errorf("ERROR loading combined organisations: %+v", err.Error())
-		return
+		return errors.New(fmt.Sprintf("ERROR loading combined organisations: %+v", err))
 	}
 
 	if err = s.storeOrgsUrls(db); err != nil {
-		log.Errorf("ERROR loading combined organisations: %+v", err.Error())
-		return
+		return errors.New(fmt.Sprintf("ERROR loading combined organisations: %+v", err))
 	}
 
 	s.initialised = true
+	return nil
 }
 
 func createCacheBucket(bucketName string, db *bolt.DB) error {
@@ -197,12 +193,11 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 	for {
 		select {
 		case err := <-errs:
-			log.Errorf("Oh no! %+v", err.Error())
 			return err
 		case combinedOrgResult, ok := <-combineOrgChan:
 			if !ok {
 				log.Debug("Almost done. Waiting for subroutines to terminate")
-				storeOrgToCache(db, combinedOrgCache, nil)
+				storeOrgToCache(db, combinedOrgCache, nil, errs)
 				wg.Wait()
 				for k := range combinedOrgCache {
 					delete(combinedOrgCache, k)
@@ -227,7 +222,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 					copyOfCombinedOrgCache[k] = v
 					delete(combinedOrgCache, k)
 				}
-				go storeOrgToCache(db, copyOfCombinedOrgCache, &wg)
+				go storeOrgToCache(db, copyOfCombinedOrgCache, &wg, errs)
 				combinedOrgCache = make(map[string]*combinedOrg)
 			}
 
@@ -236,7 +231,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 
 }
 
-func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *sync.WaitGroup) {
+func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *sync.WaitGroup, errs chan<- error) {
 	start := time.Now()
 	if wg != nil {
 		defer func(startTime time.Time) {
@@ -278,7 +273,7 @@ func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *
 		return nil
 	})
 	if err != nil {
-		log.Errorf("ERROR store: %+v", err) //TODO how to handle?
+		errs <- err
 	}
 
 }

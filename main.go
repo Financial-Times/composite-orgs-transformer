@@ -102,7 +102,16 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 		cacheFileName:    cacheFile,
 	}
 
-	go orgService.load()
+	go func() {
+		for {
+			if err := orgService.load(); err != nil {
+				log.Errorf("Error while initializing orgsService. Retrying. (%v)", err)
+				time.Sleep(60 * time.Second)
+			} else {
+				break
+			}
+		}
+	}()
 	router := mux.NewRouter()
 
 	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
