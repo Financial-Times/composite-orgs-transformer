@@ -55,7 +55,6 @@ func (s *orgServiceImpl) count() int {
 func (s *orgServiceImpl) getOrgs() (orgs []byte, err error) {
 	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{ReadOnly: true, Timeout: 10 * time.Second})
 	if err != nil {
-		//log.Errorf("ERROR opening cache file for [%v]: %v", uuid, err.Error())
 		return nil, err
 	}
 	defer db.Close()
@@ -181,7 +180,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 	go s.fetchAllOrgsFromURL(s.v1URL, v1Orgs, errs, done)
 
 	combineOrgChan := make(chan *combinedOrg)
-	s.list = make([]listEntry, 1)
+	s.list = nil
 	go func() {
 		log.Debugf("Combining results")
 		s.combineOrganisations(combineOrgChan, fsOrgs, v1Orgs, errs, done)
@@ -396,7 +395,6 @@ func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{})
 	for uuidString := range v1UUID {
 		uuids = append(uuids, uuidString)
 	}
-	uuids = append(uuids, v2Org.UUID)
 
 	canonicalUUID, _ := canonical(uuids...)
 	v2Org.UUID = canonicalUUID
