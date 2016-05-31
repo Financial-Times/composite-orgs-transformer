@@ -90,11 +90,13 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 		uuidV2toUUIDV1: make(map[string]map[string]struct{}),
 	}
 
+	repo := &httpOrgsRepo{client: httpClient}
+
 	orgService := &orgServiceImpl{
 		fsURL:            fsURL,
 		v1URL:            v1URL,
 		concorder:        con,
-		client:           httpClient,
+		orgsRepo:         repo,
 		combinedOrgCache: make(map[string]*combinedOrg),
 		baseURI:          baseURL,
 		initialised:      false,
