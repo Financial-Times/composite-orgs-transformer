@@ -118,7 +118,7 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
 
 	router.HandleFunc("/transformers/organisations", orgHandler.getAllOrgs).Methods("GET")
-	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})}", orgHandler.getOrgByUUID).Methods("GET")
+	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", orgHandler.getOrgByUUID).Methods("GET")
 	router.HandleFunc("/transformers/organisations/__count", orgHandler.count).Methods("GET")
 	http.Handle("/", router)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,

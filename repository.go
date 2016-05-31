@@ -22,7 +22,6 @@ func (r *httpOrgsRepo) orgsFromURL(u string) ([]listEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 	defer func() {
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
