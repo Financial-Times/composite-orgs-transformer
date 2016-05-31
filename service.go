@@ -16,7 +16,7 @@ const (
 	uppIdentifier       = "http://api.ft.com/system/FT-UPP"
 )
 
-var uuidExtractRegex = regexp.MustCompile(".*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+var uuidExtractRegex = regexp.MustCompile(".*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$")
 var concurrentGoroutines = make(chan struct{}, 100)
 
 type orgsService interface {

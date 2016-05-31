@@ -13,7 +13,7 @@ const (
 	v2TransURL        = "http://v2-transformer/transformers/organisations"
 	compositeTransURL = "http://comp-transformer/transformers/organisations"
 
-	v1UUID = "b325ed5e-41cf-37ea-a509-726fe9c0e19b"
+	v1UUID = "B325ED5E-41CF-37EA-A509-726FE9C0E19B"
 	v2UUID = "d039dc83-eb00-3eeb-bbe8-7056d9da3058"
 
 	concV1UUID1   = "535e0b7e-dce9-3c37-b061-6fb6ad2bdf89"
