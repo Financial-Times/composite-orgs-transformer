@@ -131,6 +131,8 @@ func TestGetOrganisations(t *testing.T) {
 			Type: orgType,
 			Identifiers: []identifier{
 				identifier{Authority: FS, IdentifierValue: concV2UUID + "base64"},
+				identifier{Authority: TME, IdentifierValue: concV1UUID2 + "base64"},
+				identifier{Authority: TME, IdentifierValue: concV1UUID1 + "base64"},
 				identifier{Authority: UPP, IdentifierValue: concV1UUID2},
 				identifier{Authority: UPP, IdentifierValue: concV1UUID1},
 				identifier{Authority: UPP, IdentifierValue: concV2UUID},
