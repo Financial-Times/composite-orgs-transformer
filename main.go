@@ -140,5 +140,8 @@ func newResilientClient() *pester.Client {
 		Transport: tr,
 		Timeout:   30 * time.Second,
 	}
-	return pester.NewExtendedClient(c)
+	client := pester.NewExtendedClient(c)
+	client.MaxRetries = 5
+	client.Concurrency = 1
+	return client
 }

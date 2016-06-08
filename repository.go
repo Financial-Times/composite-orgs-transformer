@@ -45,6 +45,10 @@ func (r *httpOrgsRepo) orgFromURL(u string) (combinedOrg, error) {
 		io.Copy(ioutil.Discard, resp.Body)
 		resp.Body.Close()
 	}()
+	if resp.StatusCode == http.StatusNotFound {
+		//should not be an error, i.e. skip those that are not found
+		return combinedOrg{}, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return combinedOrg{}, fmt.Errorf("Could not get orgs from %v. Returned %v", u, resp.StatusCode)
 	}

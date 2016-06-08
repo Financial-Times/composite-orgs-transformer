@@ -14,10 +14,10 @@ const (
 	compositeOrgsBucket = "combinedorg"
 	orgsUrlsBucket      = "orgsuris"
 	uppIdentifier       = "http://api.ft.com/system/FT-UPP"
+	tmeIdentifier       = "http://api.ft.com/system/FT-TME"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$")
-var concurrentGoroutines = make(chan struct{}, 100)
 
 type orgsService interface {
 	getOrgs() ([]byte, error)
@@ -206,6 +206,9 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 				s.c = len(s.list)
 				return nil
 			}
+			if combinedOrgResult.UUID == "" {
+				break
+			}
 			if len(s.list)%100000 == 1 {
 				log.Debugf("Progress: %v", len(s.list))
 			}
@@ -295,7 +298,7 @@ func (s *orgServiceImpl) fetchAllOrgsFromURL(listEndpoint string, orgs chan<- st
 	}
 }
 
-func (s *orgServiceImpl) fetchOrgFromURLThrottled(url string) (combinedOrg, error) {
+func (s *orgServiceImpl) fetchOrgFromURLThrottled(url string, concurrentGoroutines chan struct{}) (combinedOrg, error) {
 	defer func(limitGoroutinesChannel chan struct{}) {
 		<-limitGoroutinesChannel
 	}(concurrentGoroutines)
@@ -309,6 +312,9 @@ func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, 
 	defer func() {
 		close(combineOrgChan)
 	}()
+	var concurrentGoroutines = make(chan struct{}, 100)
+	defer close(concurrentGoroutines)
+
 	for !fsDone || !v1Done {
 		select {
 		case fsOrgUUID, ok := <-fsOrgs:
@@ -317,7 +323,7 @@ func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, 
 			} else {
 				cWait.Add(1)
 				go func() {
-					s.handleFsOrg(fsOrgUUID, combineOrgChan, errs, done)
+					s.handleFsOrg(fsOrgUUID, combineOrgChan, errs, done, concurrentGoroutines)
 					cWait.Done()
 				}()
 			}
@@ -327,7 +333,7 @@ func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, 
 			} else {
 				cWait.Add(1)
 				go func() {
-					s.handleV1Org(v1OrgUUID, combineOrgChan, errs, done)
+					s.handleV1Org(v1OrgUUID, combineOrgChan, errs, done, concurrentGoroutines)
 					cWait.Done()
 				}()
 			}
@@ -336,10 +342,10 @@ func (s *orgServiceImpl) combineOrganisations(combineOrgChan chan *combinedOrg, 
 		}
 	}
 	cWait.Wait()
-	close(concurrentGoroutines)
+
 }
 
-func (s *orgServiceImpl) handleFsOrg(fsOrgUUID string, combineOrgChan chan *combinedOrg, errs chan error, done <-chan struct{}) {
+func (s *orgServiceImpl) handleFsOrg(fsOrgUUID string, combineOrgChan chan *combinedOrg, errs chan error, done <-chan struct{}, concurrentGoroutines chan struct{}) {
 	v1UUID, found, err := s.concorder.v2tov1(fsOrgUUID)
 	if err != nil {
 		select {
@@ -350,7 +356,7 @@ func (s *orgServiceImpl) handleFsOrg(fsOrgUUID string, combineOrgChan chan *comb
 	}
 	var org combinedOrg
 	if found {
-		org, err = s.mergeOrgs(fsOrgUUID, v1UUID)
+		org, err = s.mergeOrgs(fsOrgUUID, v1UUID, concurrentGoroutines)
 		if err != nil {
 			errs <- err
 		}
@@ -364,7 +370,7 @@ func (s *orgServiceImpl) handleFsOrg(fsOrgUUID string, combineOrgChan chan *comb
 	}
 }
 
-func (s *orgServiceImpl) handleV1Org(v1OrgUUID string, combineOrgChan chan *combinedOrg, errs chan error, done <-chan struct{}) {
+func (s *orgServiceImpl) handleV1Org(v1OrgUUID string, combineOrgChan chan *combinedOrg, errs chan error, done <-chan struct{}, concurrentGoroutines chan struct{}) {
 	fsUUID, err := s.concorder.v1tov2(v1OrgUUID)
 	if err != nil {
 		select {
@@ -384,24 +390,47 @@ func (s *orgServiceImpl) handleV1Org(v1OrgUUID string, combineOrgChan chan *comb
 
 //This is the function where condordance rules will be applied.
 //This is still relying on the fact that v2-orgs-transformer returns concorded info like TME identifiers.
-func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{}) (combinedOrg, error) {
+func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{}, concurrentGoroutines chan struct{}) (combinedOrg, error) {
 	var uuids []string
 	concurrentGoroutines <- struct{}{}
-	v2Org, err := s.fetchOrgFromURLThrottled(s.fsURL + "/" + fsOrgUUID)
+	v2Org, err := s.fetchOrgFromURLThrottled(s.fsURL+"/"+fsOrgUUID, concurrentGoroutines)
 	if err != nil {
-		return v2Org, err
+		return combinedOrg{}, err
+	}
+	if v2Org.UUID == "" {
+		log.Warnf("Missing organisation from fs: %v. Skipping...", fsOrgUUID)
+		return combinedOrg{}, nil
+	}
+	if err = s.mergeIdentifiers(&v2Org, v1UUID, concurrentGoroutines); err != nil {
+		return combinedOrg{}, err
 	}
 
 	for uuidString := range v1UUID {
 		uuids = append(uuids, uuidString)
 	}
-
+	uuids = append(uuids, fsOrgUUID)
 	canonicalUUID, _ := canonical(uuids...)
 	v2Org.UUID = canonicalUUID
-	for i := 0; i < len(uuids); i++ {
-		v2Org.Identifiers = append(v2Org.Identifiers,
-			identifier{Authority: uppIdentifier, IdentifierValue: uuids[i]})
-
-	}
 	return v2Org, nil
+}
+
+func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]struct{}, concurrentGoroutines chan struct{}) error {
+	var identifiers []identifier
+	for _, id := range v2Org.Identifiers {
+		if id.Authority != tmeIdentifier {
+			identifiers = append(identifiers, id)
+		}
+	}
+	for uuidString := range v1UUID {
+		concurrentGoroutines <- struct{}{}
+		v1Org, err := s.fetchOrgFromURLThrottled(s.v1URL+"/"+uuidString, concurrentGoroutines)
+		if err != nil {
+			return err
+		}
+		for _, id := range v1Org.Identifiers {
+			identifiers = append(identifiers, id)
+		}
+	}
+	v2Org.Identifiers = identifiers
+	return nil
 }
