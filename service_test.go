@@ -1,17 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"sort"
 	"strings"
 	"testing"
 )
 
 const (
-	v1TransURL        = "http://v1-transformer/transformers/organisations"
-	v2TransURL        = "http://v2-transformer/transformers/organisations"
-	compositeTransURL = "http://comp-transformer/transformers/organisations"
+	v1TransURL = "http://v1-transformer/transformers/organisations"
+	v2TransURL = "http://v2-transformer/transformers/organisations"
 
 	v1UUID = "B325ED5E-41CF-37EA-A509-726FE9C0E19B"
 	v2UUID = "d039dc83-eb00-3eeb-bbe8-7056d9da3058"
@@ -28,16 +29,16 @@ const (
 	FS  = "http://api.ft.com/system/FACTSET"
 )
 
-type ByApiURL []listEntry
+type ByID []idEntry
 
-func (s ByApiURL) Len() int {
+func (s ByID) Len() int {
 	return len(s)
 }
-func (s ByApiURL) Swap(i, j int) {
+func (s ByID) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
-func (s ByApiURL) Less(i, j int) bool {
-	return s[i].APIURL < s[j].APIURL
+func (s ByID) Less(i, j int) bool {
+	return s[i].ID < s[j].ID
 }
 
 type ByIdentifier []identifier
@@ -98,7 +99,6 @@ func TestGetOrganisations(t *testing.T) {
 		concorder:        con,
 		orgsRepo:         repo,
 		combinedOrgCache: make(map[string]*combinedOrg),
-		baseURI:          compositeTransURL,
 		initialised:      false,
 		cacheFileName:    "test.db",
 	}
@@ -108,10 +108,21 @@ func TestGetOrganisations(t *testing.T) {
 
 	//list entries should contain only canonical uuids
 	orgs, _ := orgService.getOrgs()
-	var entries []listEntry
-	json.Unmarshal(orgs, &entries)
-	sort.Sort(ByApiURL(entries))
-	assert.EqualValues(t, []listEntry{listEntry{APIURL: compositeTransURL + "/" + canonicalUUID}, listEntry{APIURL: compositeTransURL + "/" + v1UUID}, listEntry{APIURL: compositeTransURL + "/" + v2UUID}}, entries, "List entries should contain only canonical uuids")
+	var entries []idEntry
+	dec := json.NewDecoder(bytes.NewReader(orgs))
+	for {
+		var ie idEntry
+		err = dec.Decode(&ie)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+		}
+		entries = append(entries, ie)
+	}
+
+	sort.Sort(ByID(entries))
+	assert.EqualValues(t, []idEntry{idEntry{ID: canonicalUUID}, idEntry{ID: v1UUID}, idEntry{ID: v2UUID}}, entries, "List entries should contain only canonical uuids")
 
 	//not concorded orgs should not be found
 	v1Org, found, _ := orgService.getOrgByUUID(v1UUID)

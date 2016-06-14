@@ -38,7 +38,6 @@ func (orgHandler *orgsHandler) getAllOrgs(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	w.Header().Add("Content-Type", "application/json")
 	w.Write(orgUris)
 }
 
@@ -60,7 +59,7 @@ func (orgHandler *orgsHandler) getOrgByUUID(writer http.ResponseWriter, req *htt
 	if found {
 		if org.UUID != uuid {
 			log.Printf("Uuid %v is not the canonical one: %v", uuid, org.UUID)
-			writer.Header().Add("Location", orgHandler.service.getBaseURI()+"/"+org.UUID)
+			writer.Header().Add("Location", "/transformers/organisations/"+org.UUID)
 			writer.WriteHeader(http.StatusMovedPermanently)
 			return
 		}

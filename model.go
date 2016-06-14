@@ -24,3 +24,7 @@ type identifier struct {
 type listEntry struct {
 	APIURL string `json:"apiUrl"`
 }
+
+type idEntry struct {
+	ID string `json:"id"`
+}
