@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
@@ -23,7 +25,6 @@ type orgsService interface {
 	getOrgs() ([]byte, error)
 	getOrgByUUID(uuid string) (combinedOrg, bool, error)
 	isInitialised() bool
-	getBaseURI() string
 	count() int
 }
 
@@ -33,15 +34,10 @@ type orgServiceImpl struct {
 	concorder        concorder
 	orgsRepo         orgsRepo
 	combinedOrgCache map[string]*combinedOrg
-	list             []listEntry
+	list             []string
 	initialised      bool
-	baseURI          string
 	cacheFileName    string
 	c                int
-}
-
-func (s *orgServiceImpl) getBaseURI() string {
-	return s.baseURI
 }
 
 func (s *orgServiceImpl) isInitialised() bool {
@@ -135,7 +131,7 @@ func (s *orgServiceImpl) load() error {
 		return fmt.Errorf("ERROR loading combined organisations: %+v", err)
 	}
 
-	if err = s.storeOrgsUrls(db); err != nil {
+	if err = s.storeOrgsIDS(db); err != nil {
 		return fmt.Errorf("ERROR loading combined organisations: %+v", err)
 	}
 
@@ -154,20 +150,22 @@ func createCacheBucket(bucketName string, db *bolt.DB) error {
 	})
 }
 
-func (s *orgServiceImpl) storeOrgsUrls(db *bolt.DB) error {
+func (s *orgServiceImpl) storeOrgsIDS(db *bolt.DB) error {
 	return db.Batch(func(tx *bolt.Tx) error {
 
 		bucket := tx.Bucket([]byte(orgsUrlsBucket))
 		if bucket == nil {
 			return fmt.Errorf("Bucket %v not found!", orgsUrlsBucket)
 		}
-		marshalledOrgsUrls, err := json.Marshal(s.list)
-		if err != nil {
-			return err
+		var b bytes.Buffer
+		w := bufio.NewWriter(&b)
+		enc := json.NewEncoder(w)
+		for _, u := range s.list {
+			enc.Encode(&idEntry{ID: u})
 		}
+		w.Flush()
 		s.list = nil
-		err = bucket.Put([]byte("orgs"), marshalledOrgsUrls)
-		return err
+		return bucket.Put([]byte("orgs"), b.Bytes())
 	})
 }
 
@@ -212,7 +210,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 			if len(s.list)%100000 == 1 {
 				log.Debugf("Progress: %v", len(s.list))
 			}
-			s.list = append(s.list, listEntry{fmt.Sprintf("%s/%s", s.baseURI, combinedOrgResult.UUID)})
+			s.list = append(s.list, combinedOrgResult.UUID)
 
 			//save to cache only concorded orgs. For non concorded orgs combinedOrgResult will only contain UUID
 			if combinedOrgResult.Type != "" {
@@ -427,9 +425,7 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 		if err != nil {
 			return err
 		}
-		for _, id := range v1Org.Identifiers {
-			identifiers = append(identifiers, id)
-		}
+		identifiers = append(identifiers, v1Org.Identifiers...)
 	}
 	v2Org.Identifiers = identifiers
 	return nil

@@ -51,12 +51,6 @@ func main() {
 		Desc:   "Port to listen on",
 		EnvVar: "PORT",
 	})
-	baseURL := app.String(cli.StringOpt{
-		Name:   "base-url",
-		Value:  "http://localhost:8080/organisations",
-		Desc:   "Base url",
-		EnvVar: "BASE_URL",
-	})
 	cacheFileName := app.String(cli.StringOpt{
 		Name:   "cache-file-name",
 		Value:  "cache.db",
@@ -65,7 +59,7 @@ func main() {
 	})
 
 	app.Action = func() {
-		if err := runApp(*v1URL, *fsURL, *port, *baseURL, *cacheFileName); err != nil {
+		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("Started app")
@@ -74,7 +68,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) error {
+func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 	if v1URL == "" {
 		return errors.New("v1 Organisation transformer URL must be provided")
 	}
@@ -98,7 +92,6 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 		concorder:        con,
 		orgsRepo:         repo,
 		combinedOrgCache: make(map[string]*combinedOrg),
-		baseURI:          baseURL,
 		initialised:      false,
 		cacheFileName:    cacheFile,
 	}
@@ -117,9 +110,9 @@ func runApp(v1URL, fsURL string, port int, baseURL string, cacheFile string) err
 
 	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
 
-	router.HandleFunc("/transformers/organisations", orgHandler.getAllOrgs).Methods("GET")
 	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", orgHandler.getOrgByUUID).Methods("GET")
 	router.HandleFunc("/transformers/organisations/__count", orgHandler.count).Methods("GET")
+	router.HandleFunc("/transformers/organisations/__ids", orgHandler.getAllOrgs).Methods("GET")
 	http.Handle("/", router)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
 		httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), router)))
