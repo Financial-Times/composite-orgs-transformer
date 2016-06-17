@@ -113,9 +113,14 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", orgHandler.getOrgByUUID).Methods("GET")
 	router.HandleFunc("/transformers/organisations/__count", orgHandler.count).Methods("GET")
 	router.HandleFunc("/transformers/organisations/__ids", orgHandler.getAllOrgs).Methods("GET")
-	http.Handle("/", router)
-	err := http.ListenAndServe(fmt.Sprintf(":%d", port), httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
-		httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), router)))
+
+	var h http.Handler = router
+	h = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), h)
+	h = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, h)
+
+	http.Handle("/", h)
+
+	err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	return err
 }
