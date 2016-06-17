@@ -14,6 +14,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"time"
 )
 
@@ -97,6 +98,9 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 		cacheFileName:    cacheFile,
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
 	go func() {
 		for {
 			if err := orgService.load(); err != nil {
@@ -121,9 +125,18 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 
 	http.Handle("/", h)
 
-	err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	errs := make(chan error)
+	go func() {
+		errs <- http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	}()
 
-	return err
+	select {
+	case err := <-errs:
+		return err
+	case <-c:
+		log.Infoln("caught signal - exiting")
+		return nil
+	}
 }
 
 func newResilientClient() *pester.Client {
