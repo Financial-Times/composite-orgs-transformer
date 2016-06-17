@@ -12,6 +12,7 @@ import (
 	"github.com/sethgrid/pester"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 )
