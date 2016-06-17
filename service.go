@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
@@ -38,6 +39,27 @@ type orgServiceImpl struct {
 	initialised      bool
 	cacheFileName    string
 	c                int
+
+	db *bolt.DB
+}
+
+func (s *orgServiceImpl) init() error {
+	if s.db != nil {
+		return errors.New("already open")
+	}
+	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		return err
+	}
+	s.db = db
+	return nil
+}
+
+func (s *orgServiceImpl) shutdown() error {
+	if s.db == nil {
+		return errors.New("not open")
+	}
+	return s.db.Close()
 }
 
 func (s *orgServiceImpl) isInitialised() bool {
@@ -49,13 +71,8 @@ func (s *orgServiceImpl) count() int {
 }
 
 func (s *orgServiceImpl) getOrgs() (orgs []byte, err error) {
-	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{ReadOnly: true, Timeout: 10 * time.Second})
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
 	var cachedValue []byte
-	err = db.View(func(tx *bolt.Tx) error {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(orgsUrlsBucket))
 		if bucket == nil {
 			return fmt.Errorf("Bucket %v not found!", orgsUrlsBucket)
@@ -78,14 +95,8 @@ func (s *orgServiceImpl) getOrgs() (orgs []byte, err error) {
 }
 
 func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
-	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{ReadOnly: true, Timeout: 10 * time.Second})
-	if err != nil {
-		log.Errorf("ERROR opening cache file for [%v]: %v", uuid, err.Error())
-		return combinedOrg{}, false, err
-	}
-	defer db.Close()
 	var cachedValue []byte
-	err = db.View(func(tx *bolt.Tx) error {
+	err := s.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(compositeOrgsBucket))
 		if bucket == nil {
 			return fmt.Errorf("Bucket %v not found!", compositeOrgsBucket)
@@ -111,27 +122,22 @@ func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
 }
 
 func (s *orgServiceImpl) load() error {
-	db, err := bolt.Open(s.cacheFileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
-	if err != nil {
-		return fmt.Errorf("ERROR opening cache file for init: %v", err)
-	}
-	defer db.Close()
-	if err = createCacheBucket(compositeOrgsBucket, db); err != nil {
+	if err := createCacheBucket(compositeOrgsBucket, s.db); err != nil {
 		return fmt.Errorf("ERROR creating compositeOrgsBucket: %v", err)
 	}
 
-	if err = createCacheBucket(orgsUrlsBucket, db); err != nil {
+	if err := createCacheBucket(orgsUrlsBucket, s.db); err != nil {
 		return fmt.Errorf("ERROR creating orgsUrlsBucket: %v", err)
 	}
 
-	if err = s.concorder.load(); err != nil {
+	if err := s.concorder.load(); err != nil {
 		return fmt.Errorf("ERROR loading concordance data: %+v", err)
 	}
-	if err = s.loadCombinedOrgs(db); err != nil {
+	if err := s.loadCombinedOrgs(s.db); err != nil {
 		return fmt.Errorf("ERROR loading combined organisations: %+v", err)
 	}
 
-	if err = s.storeOrgsIDS(db); err != nil {
+	if err := s.storeOrgsIDS(s.db); err != nil {
 		return fmt.Errorf("ERROR loading combined organisations: %+v", err)
 	}
 

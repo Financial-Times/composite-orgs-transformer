@@ -98,6 +98,9 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 		cacheFileName:    cacheFile,
 	}
 
+	orgService.init()
+	defer orgService.shutdown()
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
