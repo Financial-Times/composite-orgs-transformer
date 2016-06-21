@@ -85,7 +85,6 @@ func (s *orgServiceImpl) getOrgs() (orgs []byte, err error) {
 		return nil, err
 	}
 	if len(cachedValue) == 0 {
-		log.Infof("INFO No cached value for [%v]", "orgs")
 		return nil, nil
 	}
 	c := make([]byte, len(cachedValue))
@@ -110,7 +109,6 @@ func (s *orgServiceImpl) getOrgByUUID(uuid string) (combinedOrg, bool, error) {
 		return combinedOrg{}, false, err
 	}
 	if len(cachedValue) == 0 {
-		log.Infof("INFO No cached value for [%v]", uuid)
 		return combinedOrg{}, false, nil
 	}
 	var org combinedOrg
