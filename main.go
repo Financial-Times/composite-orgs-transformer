@@ -29,7 +29,6 @@ type httpClient interface {
 }
 
 func init() {
-	log.SetFormatter(new(log.JSONFormatter))
 	log.SetLevel(log.DebugLevel)
 }
 
@@ -98,7 +97,9 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 		cacheFileName:    cacheFile,
 	}
 
-	orgService.init()
+	if err := orgService.init(); err != nil {
+		panic(err)
+	}
 	defer orgService.shutdown()
 
 	c := make(chan os.Signal, 1)

@@ -186,7 +186,6 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 	combineOrgChan := make(chan *combinedOrg)
 	s.list = nil
 	go func() {
-		log.Debugf("Combining results")
 		s.combineOrganisations(combineOrgChan, fsOrgs, v1Orgs, errs, done)
 	}()
 
