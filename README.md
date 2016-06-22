@@ -1,4 +1,5 @@
-Composite Organisations transformer
+# Composite Organisations transformer
+[![Circle CI](https://circleci.com/gh/Financial-Times/composite-orgs-transformer/tree/master.png?style=shield)](https://circleci.com/gh/Financial-Times/composite-orgs-transformer/tree/master)
 
 Fetches data from v1-orgs-transformer and (v2)-orgs-transformer and combines them via concordance data.
 

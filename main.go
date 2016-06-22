@@ -12,7 +12,9 @@ import (
 	"github.com/sethgrid/pester"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"time"
 )
 
@@ -27,7 +29,6 @@ type httpClient interface {
 }
 
 func init() {
-	log.SetFormatter(new(log.JSONFormatter))
 	log.SetLevel(log.DebugLevel)
 }
 
@@ -96,6 +97,14 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 		cacheFileName:    cacheFile,
 	}
 
+	if err := orgService.init(); err != nil {
+		panic(err)
+	}
+	defer orgService.shutdown()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
 	go func() {
 		for {
 			if err := orgService.load(); err != nil {
@@ -113,11 +122,25 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", orgHandler.getOrgByUUID).Methods("GET")
 	router.HandleFunc("/transformers/organisations/__count", orgHandler.count).Methods("GET")
 	router.HandleFunc("/transformers/organisations/__ids", orgHandler.getAllOrgs).Methods("GET")
-	http.Handle("/", router)
-	err := http.ListenAndServe(fmt.Sprintf(":%d", port), httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry,
-		httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), router)))
 
-	return err
+	var h http.Handler = router
+	h = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), h)
+	h = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, h)
+
+	http.Handle("/", h)
+
+	errs := make(chan error)
+	go func() {
+		errs <- http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	}()
+
+	select {
+	case err := <-errs:
+		return err
+	case <-c:
+		log.Infoln("caught signal - exiting")
+		return nil
+	}
 }
 
 func newResilientClient() *pester.Client {

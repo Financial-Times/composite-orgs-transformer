@@ -102,6 +102,8 @@ func TestGetOrganisations(t *testing.T) {
 		initialised:      false,
 		cacheFileName:    "test.db",
 	}
+	orgService.init()
+	defer orgService.shutdown()
 
 	err := orgService.load()
 	assert.Equal(t, nil, err, "Error should be nil")
