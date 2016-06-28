@@ -41,18 +41,6 @@ func (s ByID) Less(i, j int) bool {
 	return s[i].ID < s[j].ID
 }
 
-type ByIdentifier []identifier
-
-func (s ByIdentifier) Len() int {
-	return len(s)
-}
-func (s ByIdentifier) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s ByIdentifier) Less(i, j int) bool {
-	return s[i].Authority+s[i].IdentifierValue < s[j].Authority+s[j].IdentifierValue
-}
-
 func TestGetOrganisations(t *testing.T) {
 
 	con := &mockBerthaConcorder{
@@ -62,34 +50,34 @@ func TestGetOrganisations(t *testing.T) {
 
 	repo := &mockOrgsRepo{v1Orgs: map[string]combinedOrg{
 		v1TransURL + "/" + v1UUID: combinedOrg{
-			UUID:        v1UUID,
-			ProperName:  "V1 Name 1",
-			Type:        orgType,
-			Identifiers: []identifier{identifier{Authority: UPP, IdentifierValue: v1UUID}, identifier{Authority: TME, IdentifierValue: v1UUID + "base64"}},
+			UUID:       v1UUID,
+			ProperName: "V1 Name 1",
+			Type:       orgType,
+			AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{v1UUID}, TME: []string{v1UUID + "base64"}},
 		},
 		v1TransURL + "/" + concV1UUID1: combinedOrg{
-			UUID:        concV1UUID1,
-			ProperName:  "Conc V1 Name 1",
-			Type:        orgType,
-			Identifiers: []identifier{identifier{Authority: UPP, IdentifierValue: concV1UUID1}, identifier{Authority: TME, IdentifierValue: concV1UUID1 + "base64"}},
+			UUID:       concV1UUID1,
+			ProperName: "Conc V1 Name 1",
+			Type:       orgType,
+			AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{concV1UUID1}, TME: []string{concV1UUID1 + "base64"}},
 		},
 		v1TransURL + "/" + concV1UUID2: combinedOrg{
-			UUID:        concV1UUID2,
-			ProperName:  "Conc V1 Name 2",
-			Type:        orgType,
-			Identifiers: []identifier{identifier{Authority: UPP, IdentifierValue: concV1UUID2}, identifier{Authority: TME, IdentifierValue: concV1UUID2 + "base64"}},
+			UUID:       concV1UUID2,
+			ProperName: "Conc V1 Name 2",
+			Type:       orgType,
+			AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{concV1UUID2}, TME: []string{concV1UUID2 + "base64"}},
 		},
 	},
 		v2Orgs: map[string]combinedOrg{
 			v2TransURL + "/" + v2UUID: combinedOrg{
-				UUID:        v2UUID,
-				Type:        orgType,
-				Identifiers: []identifier{identifier{Authority: UPP, IdentifierValue: v2UUID}, identifier{Authority: FS, IdentifierValue: v2UUID + "base64"}},
+				UUID: v2UUID,
+				Type: orgType,
+				AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{v2UUID}, FactsetIdentifier: v2UUID + "base64"},
 			},
 			v2TransURL + "/" + concV2UUID: combinedOrg{
-				UUID:        concV1UUID2,
-				Type:        orgType,
-				Identifiers: []identifier{identifier{Authority: UPP, IdentifierValue: concV2UUID}, identifier{Authority: FS, IdentifierValue: concV2UUID + "base64"}},
+				UUID: concV1UUID2,
+				Type: orgType,
+				AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{concV2UUID}, FactsetIdentifier: concV2UUID + "base64"},
 			},
 		}}
 
@@ -138,17 +126,15 @@ func TestGetOrganisations(t *testing.T) {
 	for _, u := range []string{concV1UUID1, concV1UUID2, concV2UUID} {
 		concordedOrg, found, _ := orgService.getOrgByUUID(u)
 		assert.Equal(t, true, found, "Concorded org should be found")
-		sort.Sort(ByIdentifier(concordedOrg.Identifiers))
+		sort.Strings(concordedOrg.AlternativeIdentifiers.Uuids)
+		sort.Strings(concordedOrg.AlternativeIdentifiers.TME)
 		assert.EqualValues(t, combinedOrg{
 			UUID: canonicalUUID,
 			Type: orgType,
-			Identifiers: []identifier{
-				identifier{Authority: FS, IdentifierValue: concV2UUID + "base64"},
-				identifier{Authority: TME, IdentifierValue: concV1UUID2 + "base64"},
-				identifier{Authority: TME, IdentifierValue: concV1UUID1 + "base64"},
-				identifier{Authority: UPP, IdentifierValue: concV1UUID2},
-				identifier{Authority: UPP, IdentifierValue: concV1UUID1},
-				identifier{Authority: UPP, IdentifierValue: concV2UUID},
+			AlternativeIdentifiers: alternativeIdentifiers{
+				FactsetIdentifier: concV2UUID + "base64",
+				TME:               []string{concV1UUID2 + "base64", concV1UUID1 + "base64"},
+				Uuids:             []string{concV1UUID2, concV1UUID1, concV2UUID},
 			},
 		}, concordedOrg, "Concorded org should have v1 and v2 identifiers")
 	}

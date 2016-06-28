@@ -264,13 +264,14 @@ func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *
 			if err != nil {
 				return err
 			}
-			if combinedOrgResult.Identifiers != nil && len(combinedOrgResult.Identifiers) > 0 {
-				for _, identifierVal := range combinedOrgResult.Identifiers {
-					if identifierVal.Authority == uppIdentifier {
-						err = bucket.Put([]byte(identifierVal.IdentifierValue), marshalledCombinedOrg)
-						if err != nil {
-							return err
-						}
+			if combinedOrgResult.AlternativeIdentifiers.Uuids != nil && len(combinedOrgResult.AlternativeIdentifiers.Uuids) > 0 {
+				for _, alternativeUuid := range combinedOrgResult.AlternativeIdentifiers.Uuids {
+					if alternativeUuid == combinedOrgResult.UUID {
+						continue
+					}
+					err = bucket.Put([]byte(alternativeUuid), marshalledCombinedOrg)
+					if err != nil {
+						return err
 					}
 				}
 			}
@@ -416,20 +417,19 @@ func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{},
 }
 
 func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]struct{}, concurrentGoroutines chan struct{}) error {
-	var identifiers []identifier
-	for _, id := range v2Org.Identifiers {
-		if id.Authority != tmeIdentifier {
-			identifiers = append(identifiers, id)
-		}
-	}
+	var v1Uuids []string
+	var tmeIdentifiers []string
+
 	for uuidString := range v1UUID {
 		concurrentGoroutines <- struct{}{}
 		v1Org, err := s.fetchOrgFromURLThrottled(s.v1URL+"/"+uuidString, concurrentGoroutines)
 		if err != nil {
 			return err
 		}
-		identifiers = append(identifiers, v1Org.Identifiers...)
+		v1Uuids = append(v1Uuids, v1Org.AlternativeIdentifiers.Uuids...)
+		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)
 	}
-	v2Org.Identifiers = identifiers
+	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
+	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
 	return nil
 }
