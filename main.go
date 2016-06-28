@@ -16,6 +16,8 @@ import (
 	"os"
 	"os/signal"
 	"time"
+	"github.com/Financial-Times/go-fthealth/v1a"
+	status "github.com/Financial-Times/service-status-go/httphandlers"
 )
 
 type concorder interface {
@@ -118,6 +120,15 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 	router := mux.NewRouter()
 
 	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
+
+	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
+	// so it's what apps expect currently same as ping
+	router.HandleFunc(status.PingPath, status.PingHandler)
+	router.HandleFunc(status.PingPathDW, status.PingHandler)
+	router.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
+	router.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
+	router.HandleFunc("/__health", v1a.Handler("Topics Transformer Healthchecks", "Checks for accessing TME", orgHandler.HealthCheck()))
+	router.HandleFunc("/__gtg", orgHandler.GoodToGo)
 
 	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", orgHandler.getOrgByUUID).Methods("GET")
 	router.HandleFunc("/transformers/organisations/__count", orgHandler.count).Methods("GET")

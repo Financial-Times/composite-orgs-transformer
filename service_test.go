@@ -23,10 +23,6 @@ const (
 	canonicalUUID = concV1UUID2
 
 	orgType = "Organisation"
-
-	UPP = "http://api.ft.com/system/FT-UPP"
-	TME = "http://api.ft.com/system/FT-TME"
-	FS  = "http://api.ft.com/system/FACTSET"
 )
 
 type ByID []idEntry

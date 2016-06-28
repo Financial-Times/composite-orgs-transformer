@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"github.com/Financial-Times/go-fthealth/v1a"
 )
 
 type orgsHandler struct {
@@ -84,6 +85,32 @@ func (orgHandler *orgsHandler) count(writer http.ResponseWriter, req *http.Reque
 		return
 	}
 	fmt.Fprintf(writer, "%d", orgHandler.service.count())
+}
+
+func (orgHandler *orgsHandler) HealthCheck() v1a.Check {
+	return v1a.Check{
+		BusinessImpact:   "Unable to respond",
+		Name:             "Check connectivity to downstream systems",
+		PanicGuide:       "TODO complete",
+		Severity:         1,
+		TechnicalSummary: "TODO complete",
+		Checker:          orgHandler.checker,
+	}
+}
+
+func (orgHandler *orgsHandler) checker() (string, error) {
+	err := orgHandler.service.checkConnectivity()
+	if err == nil {
+		return "Connectivity to downstream systems is ok", err
+	}
+	return "Error connecting to downstream systems", err
+}
+
+//GoodToGo returns a 503 if the healthcheck fails - suitable for use from varnish to check availability of a node
+func (orgHandler *orgsHandler) GoodToGo(writer http.ResponseWriter, req *http.Request) {
+	if _, err := orgHandler.checker(); err != nil {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}
 }
 
 func (orgHandler *orgsHandler) streamIfSuccess(url string, writer http.ResponseWriter) bool {

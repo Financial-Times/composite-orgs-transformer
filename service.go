@@ -27,6 +27,7 @@ type orgsService interface {
 	getOrgByUUID(uuid string) (combinedOrg, bool, error)
 	isInitialised() bool
 	count() int
+	checkConnectivity() error
 }
 
 type orgServiceImpl struct {
@@ -431,5 +432,10 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 	}
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
 	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
+	return nil
+}
+
+func (s *orgServiceImpl) checkConnectivity() error {
+	//TODO decide what and how to check
 	return nil
 }
