@@ -1,4 +1,4 @@
-FROM alpine:3.3
+FROM alpine:3.4
 
 ADD . /composite-orgs-transformer/
 
@@ -24,7 +24,8 @@ RUN apk add --update bash \
   && cd $GOPATH/src/${REPO_PATH} \
   && echo ${LDFLAGS} \
   && go build -ldflags="${LDFLAGS}" \
-  && mv composite-orgs-transformer /app \
+  && rm -rf /composite-orgs-transformer \
+  && mv composite-orgs-transformer /composite-orgs-transformer \
   && apk del go git bzr \
   && rm -rf $GOPATH /var/cache/apk/*
-CMD [ "/app" ]
+CMD [ "/composite-orgs-transformer" ]
