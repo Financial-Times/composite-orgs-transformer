@@ -16,8 +16,6 @@ import (
 const (
 	compositeOrgsBucket = "combinedorg"
 	orgsUrlsBucket      = "orgsuris"
-	uppIdentifier       = "http://api.ft.com/system/FT-UPP"
-	tmeIdentifier       = "http://api.ft.com/system/FT-TME"
 )
 
 var uuidExtractRegex = regexp.MustCompile(".*([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$")
@@ -394,7 +392,6 @@ func (s *orgServiceImpl) handleV1Org(v1OrgUUID string, combineOrgChan chan *comb
 //This is the function where condordance rules will be applied.
 //This is still relying on the fact that v2-orgs-transformer returns concorded info like TME identifiers.
 func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{}, concurrentGoroutines chan struct{}) (combinedOrg, error) {
-	var uuids []string
 	concurrentGoroutines <- struct{}{}
 	v2Org, err := s.fetchOrgFromURLThrottled(s.fsURL+"/"+fsOrgUUID, concurrentGoroutines)
 	if err != nil {
@@ -408,11 +405,7 @@ func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{},
 		return combinedOrg{}, err
 	}
 
-	for uuidString := range v1UUID {
-		uuids = append(uuids, uuidString)
-	}
-	uuids = append(uuids, fsOrgUUID)
-	canonicalUUID, _ := canonical(uuids...)
+	canonicalUUID, _ := canonical(v2Org.AlternativeIdentifiers.Uuids...)
 	v2Org.UUID = canonicalUUID
 	return v2Org, nil
 }
@@ -426,6 +419,11 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 		v1Org, err := s.fetchOrgFromURLThrottled(s.v1URL+"/"+uuidString, concurrentGoroutines)
 		if err != nil {
 			return err
+		}
+
+		if (v1Org.UUID == "") {
+			log.Warnf("Missing v1 org %v to the corresponding fs org: %v. Skipping...", uuidString, v2Org.UUID)
+			continue
 		}
 		v1Uuids = append(v1Uuids, v1Org.AlternativeIdentifiers.Uuids...)
 		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)

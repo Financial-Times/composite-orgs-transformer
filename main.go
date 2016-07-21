@@ -60,9 +60,15 @@ func main() {
 		Desc:   "Cache file name",
 		EnvVar: "CACHE_FILE_NAME",
 	})
+	berthaURL := app.String(cli.StringOpt{
+		Name:   "bertha-url",
+		Value:  "https://bertha.ig.ft.com/view/publish/gss/1k7GHf3311hyLBsNgoocRRkHs7pIhJit0wQVReFfD_6w/orgs",
+		Desc:   "Bertha URL to concordance file",
+		EnvVar: "BERTHA_URL",
+	})
 
 	app.Action = func() {
-		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName); err != nil {
+		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("Started app")
@@ -71,7 +77,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runApp(v1URL, fsURL string, port int, cacheFile string) error {
+func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string) error {
 	if v1URL == "" {
 		return errors.New("v1 Organisation transformer URL must be provided")
 	}
@@ -85,6 +91,7 @@ func runApp(v1URL, fsURL string, port int, cacheFile string) error {
 		client:         httpClient,
 		uuidV1toUUIDV2: make(map[string]string),
 		uuidV2toUUIDV1: make(map[string]map[string]struct{}),
+		berthaURL: berthaURL,
 	}
 
 	repo := &httpOrgsRepo{client: httpClient}
