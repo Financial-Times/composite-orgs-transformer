@@ -16,16 +16,14 @@ type berthaConcorder struct {
 	lk             sync.Mutex
 	uuidV2toUUIDV1 map[string]map[string]struct{}
 	uuidV1toUUIDV2 map[string]string
+	berthaURL string
 }
 
 //Concordance model
 type Concordance struct {
-	CompositeID string `json:"compositeid"`
-	TmeID       string `json:"tmeid"`
-	FsID        string `json:"entityid"`
+	TMEID  string `json:"tmeid"`
+	V2UUID string `json:"v2uuid"`
 }
-
-const berthaURL = "https://bertha.ig.ft.com/view/publish/gss/1k7GHf3311hyLBsNgoocRRkHs7pIhJit0wQVReFfD_6w/concordances"
 
 func (b *berthaConcorder) v1tov2(uuid string) (string, error) {
 	b.lk.Lock()
@@ -50,7 +48,7 @@ func (b *berthaConcorder) v2tov1(uuid string) (map[string]struct{}, bool, error)
 func (b *berthaConcorder) load() error {
 	b.lk.Lock()
 	defer b.lk.Unlock()
-	resp, err := b.client.Get(berthaURL)
+	resp, err := b.client.Get(b.berthaURL)
 	if err != nil {
 		errMsg := fmt.Sprintf("Error while retrieving concordances: %v", err.Error())
 		return errors.New(errMsg)
@@ -72,8 +70,11 @@ func (b *berthaConcorder) load() error {
 	json.Unmarshal(body, &concordances)
 
 	for _, con := range concordances {
-		v1uuid := v1ToUUID(con.CompositeID)
-		v2uuid := v2ToUUID(con.FsID)
+		if isIncomplete(con) {
+			continue
+		}
+		v1uuid := v1ToUUID(con.TMEID)
+		v2uuid := con.V2UUID
 		uuidSet, found := b.uuidV2toUUIDV1[v2uuid]
 		if !found {
 			uuidSet = make(map[string]struct{})
@@ -85,4 +86,8 @@ func (b *berthaConcorder) load() error {
 
 	b.loaded = true
 	return nil
+}
+
+func isIncomplete(con Concordance) bool {
+	return con.TMEID == "" || con.V2UUID == ""
 }
