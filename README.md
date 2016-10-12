@@ -9,14 +9,14 @@ The organisations, which are present in the cached concordance data, are combine
 
 During the initialization process the app responds to any application specific endpoint request with **HTTP 503**.
 
-# Endpoints
+# Endpoints   
    Application specific endpoints:
    
    * /transformers/organisations/{uuid}
    * /transformers/organisations/__count
    * /transformers/organisations/__ids
    
-   Admin specific endpoints:
+Admin specific endpoints:
    
    * /ping
    * /build-info
@@ -31,19 +31,16 @@ During the initialization process the app responds to any application specific e
 
 ### Run in bash
 
-```composite-orgs-transformer --v1-transformer-url="https://user:password@pub-pre-prod-up.ft.com/__v1-orgs-transformer/transformers/organisations" --fs-transformer-url="https://v2-organisations-transformer-up.ft.com/transformers/organisations" --cache-file-name="cache.db"
-```
+`composite-orgs-transformer --v1-transformer-url="https://user:password@pub-pre-prod-up.ft.com/__v1-orgs-transformer/transformers/organisations" --fs-transformer-url="https://v2-organisations-transformer-up.ft.com/transformers/organisations" --cache-file-name="cache.db"`
 
 ### Run with Docker
 
 `docker build -t coco/composite-orgs-transformer .`
-```
-docker run -p 8080 \
+`docker run -p 8080 \
     --env "V1_TRANSFORMER_URL=http://user:password@pub-pre-prod-up.ft.com/__v1-orgs-transformer/transformers/organisations" \
     --env "FS_TRANSFORMER_URL=https://v2-organisations-transformer-up.ft.com/transformers/organisations"  \
     --env "CACHE_FILE_NAME=cache.db" \
-    coco/composite-orgs-transformer
-```
+    coco/composite-orgs-transformer`
 
 # Examples
 
