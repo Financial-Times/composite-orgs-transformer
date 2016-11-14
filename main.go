@@ -65,8 +65,15 @@ func main() {
 		EnvVar: "BERTHA_URL",
 	})
 
+	redirectLocationUrl := app.String(cli.StringOpt{
+		Name:   "redirect-base-url",
+		Value:  "/transformers/organisations/",
+		Desc:   "Redirect url",
+		EnvVar: "REDIRECT_BASE_URL",
+	})
+
 	app.Action = func() {
-		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL); err != nil {
+		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL, *redirectLocationUrl); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("Started app")
@@ -75,7 +82,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string) error {
+func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string, redirectURL string) error {
 	if v1URL == "" {
 		return errors.New("v1 Organisation transformer URL must be provided")
 	}
@@ -123,7 +130,7 @@ func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string) e
 		}
 	}()
 
-	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
+	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL, redirectURL)
 	r := router(orgHandler)
 
 	http.Handle("/", r)

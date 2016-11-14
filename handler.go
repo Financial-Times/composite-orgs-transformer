@@ -12,14 +12,15 @@ import (
 )
 
 type orgsHandler struct {
-	service orgsService
-	client  httpClient
-	v2URL   string
-	v1URL   string
+	service     orgsService
+	client      httpClient
+	v2URL       string
+	v1URL       string
+	redirectURL string
 }
 
-func newOrgsHandler(service orgsService, client httpClient, v1URL string, v2URL string) orgsHandler {
-	return orgsHandler{service: service, client: client, v1URL: v1URL, v2URL: v2URL}
+func newOrgsHandler(service orgsService, client httpClient, v1URL string, v2URL string, redirectURL string) orgsHandler {
+	return orgsHandler{service: service, client: client, v1URL: v1URL, v2URL: v2URL, redirectURL: redirectURL}
 }
 
 // /organisations endpoint
@@ -60,10 +61,7 @@ func (orgHandler *orgsHandler) getOrgByUUID(writer http.ResponseWriter, req *htt
 	if found {
 		if org.UUID != uuid {
 			log.Printf("Uuid %v is not the canonical one: %v", uuid, org.UUID)
-			writer.Header().Add("Location", "/transformers/organisations/"+org.UUID)
-
-			// This is to allow for redirects to work in the concept publisher
-			writer.Header().Add("Host", "public-services")
+			writer.Header().Add("Location", orgHandler.redirectURL+org.UUID)
 			writer.WriteHeader(http.StatusMovedPermanently)
 			return
 		}

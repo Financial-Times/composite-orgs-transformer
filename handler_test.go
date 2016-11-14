@@ -80,7 +80,7 @@ func TestGetHandler(t *testing.T) {
 			mockHttpClient{},
 			http.StatusMovedPermanently,
 			"",
-			map[string]string{"Host": "public-services", "Location": "/transformers/organisations/c7e492d9-b8f1-4318-aed8-8103df4e42a9"}},
+			map[string]string{"Location": "/transformers/organisations/c7e492d9-b8f1-4318-aed8-8103df4e42a9"}},
 		{"Not Found",
 			newRequest("GET", fmt.Sprintf("/transformers/organisations/%s", "9999"), "application/json", nil),
 			mockOrgsService{isFound: false},
@@ -93,7 +93,12 @@ func TestGetHandler(t *testing.T) {
 	for _, test := range tests {
 		rec := httptest.NewRecorder()
 
-		router(orgsHandler{test.mockOrgsService, test.mockHttpClient, "http://v1-transformer/transformers/organisations", "http://v2-transformer/transformers/organisations"}).ServeHTTP(rec, test.req)
+		router(orgsHandler{
+			test.mockOrgsService,
+			test.mockHttpClient,
+			"http://v1-transformer/transformers/organisations",
+			"http://v2-transformer/transformers/organisations",
+			"/transformers/organisations/"}).ServeHTTP(rec, test.req)
 		assert.True(test.statusCode == rec.Code, fmt.Sprintf("%s: Wrong response code, was %d, should be %d", test.name, rec.Code, test.statusCode))
 		if test.body != "" {
 			assert.JSONEq(test.body, rec.Body.String(), fmt.Sprintf("%s: Wrong body", test.name))
