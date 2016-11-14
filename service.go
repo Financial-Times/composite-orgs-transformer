@@ -421,7 +421,7 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 			return err
 		}
 
-		if (v1Org.UUID == "") {
+		if v1Org.UUID == "" {
 			log.Warnf("Missing v1 org %v to the corresponding fs org: %v. Skipping...", uuidString, v2Org.UUID)
 			continue
 		}

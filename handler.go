@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Financial-Times/go-fthealth/v1a"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"github.com/Financial-Times/go-fthealth/v1a"
 )
 
 type orgsHandler struct {
@@ -61,6 +61,9 @@ func (orgHandler *orgsHandler) getOrgByUUID(writer http.ResponseWriter, req *htt
 		if org.UUID != uuid {
 			log.Printf("Uuid %v is not the canonical one: %v", uuid, org.UUID)
 			writer.Header().Add("Location", "/transformers/organisations/"+org.UUID)
+
+			// This is to allow for redirects to work in the concept publisher
+			writer.Header().Add("Host", "public-services")
 			writer.WriteHeader(http.StatusMovedPermanently)
 			return
 		}
