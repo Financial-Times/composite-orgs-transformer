@@ -16,7 +16,7 @@ type berthaConcorder struct {
 	lk             sync.Mutex
 	uuidV2toUUIDV1 map[string]map[string]struct{}
 	uuidV1toUUIDV2 map[string]string
-	berthaURL string
+	berthaURL      string
 }
 
 //Concordance model

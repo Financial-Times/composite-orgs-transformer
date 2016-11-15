@@ -4,11 +4,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/Financial-Times/http-handlers-go/httphandlers"
+	"github.com/Financial-Times/go-fthealth/v1a"
+	status "github.com/Financial-Times/service-status-go/httphandlers"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
-	"github.com/rcrowley/go-metrics"
 	"github.com/sethgrid/pester"
 	"net"
 	"net/http"
@@ -16,8 +16,6 @@ import (
 	"os"
 	"os/signal"
 	"time"
-	"github.com/Financial-Times/go-fthealth/v1a"
-	status "github.com/Financial-Times/service-status-go/httphandlers"
 )
 
 type concorder interface {
@@ -67,8 +65,15 @@ func main() {
 		EnvVar: "BERTHA_URL",
 	})
 
+	redirectLocationUrl := app.String(cli.StringOpt{
+		Name:   "redirect-base-url",
+		Value:  "/transformers/organisations/",
+		Desc:   "Redirect url",
+		EnvVar: "REDIRECT_BASE_URL",
+	})
+
 	app.Action = func() {
-		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL); err != nil {
+		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL, *redirectLocationUrl); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("Started app")
@@ -77,7 +82,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string) error {
+func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string, redirectURL string) error {
 	if v1URL == "" {
 		return errors.New("v1 Organisation transformer URL must be provided")
 	}
@@ -91,7 +96,7 @@ func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string) e
 		client:         httpClient,
 		uuidV1toUUIDV2: make(map[string]string),
 		uuidV2toUUIDV1: make(map[string]map[string]struct{}),
-		berthaURL: berthaURL,
+		berthaURL:      berthaURL,
 	}
 
 	repo := &httpOrgsRepo{client: httpClient}
@@ -124,28 +129,11 @@ func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string) e
 			}
 		}
 	}()
-	router := mux.NewRouter()
 
-	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL)
+	orgHandler := newOrgsHandler(orgService, httpClient, v1URL, fsURL, redirectURL)
+	r := router(orgHandler)
 
-	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
-	// so it's what apps expect currently same as ping
-	router.HandleFunc(status.PingPath, status.PingHandler)
-	router.HandleFunc(status.PingPathDW, status.PingHandler)
-	router.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
-	router.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
-	router.HandleFunc("/__health", v1a.Handler("Topics Transformer Healthchecks", "Checks for accessing TME", orgHandler.HealthCheck()))
-	router.HandleFunc("/__gtg", orgHandler.GoodToGo)
-
-	router.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", orgHandler.getOrgByUUID).Methods("GET")
-	router.HandleFunc("/transformers/organisations/__count", orgHandler.count).Methods("GET")
-	router.HandleFunc("/transformers/organisations/__ids", orgHandler.getAllOrgs).Methods("GET")
-
-	var h http.Handler = router
-	h = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), h)
-	h = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, h)
-
-	http.Handle("/", h)
+	http.Handle("/", r)
 
 	errs := make(chan error)
 	go func() {
@@ -159,6 +147,24 @@ func runApp(v1URL, fsURL string, port int, cacheFile string, berthaURL string) e
 		log.Infoln("caught signal - exiting")
 		return nil
 	}
+}
+
+func router(hh orgsHandler) http.Handler {
+	servicesRouter := mux.NewRouter()
+	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
+	// so it's what apps expect currently same as ping
+	servicesRouter.HandleFunc(status.PingPath, status.PingHandler)
+	servicesRouter.HandleFunc(status.PingPathDW, status.PingHandler)
+	servicesRouter.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
+	servicesRouter.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
+	servicesRouter.HandleFunc("/__health", v1a.Handler("Composite Org Transformer Healthchecks", "Checks for the health of the service", hh.HealthCheck()))
+	servicesRouter.HandleFunc("/__gtg", hh.GoodToGo)
+
+	servicesRouter.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", hh.getOrgByUUID).Methods("GET")
+	servicesRouter.HandleFunc("/transformers/organisations/__count", hh.count).Methods("GET")
+	servicesRouter.HandleFunc("/transformers/organisations/__ids", hh.getAllOrgs).Methods("GET")
+
+	return servicesRouter
 }
 
 func newResilientClient() *pester.Client {
