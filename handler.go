@@ -60,8 +60,9 @@ func (orgHandler *orgsHandler) getOrgByUUID(writer http.ResponseWriter, req *htt
 	}
 	if found {
 		if org.UUID != uuid {
-			log.Printf("Uuid %v is not the canonical one: %v", uuid, org.UUID)
-			writer.Header().Add("Location", orgHandler.redirectURL+org.UUID)
+			log.Printf("Uuid %v is not the canonical one: %v. Setting Location to: %v for the redirect to follow", uuid, org.UUID, orgHandler.redirectURL + org.UUID)
+			writer.Header().Add("Location", orgHandler.redirectURL + org.UUID)
+			log.Printf("Location Header: %v", writer.Header().Get("Location"))
 			writer.WriteHeader(http.StatusMovedPermanently)
 			return
 		}
