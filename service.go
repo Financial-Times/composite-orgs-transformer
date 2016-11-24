@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/boltdb/bolt"
 	"regexp"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/boltdb/bolt"
 )
 
 const (
@@ -413,6 +414,7 @@ func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{},
 func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]struct{}, concurrentGoroutines chan struct{}) error {
 	var v1Uuids []string
 	var tmeIdentifiers []string
+	var v1Aliases []string
 
 	for uuidString := range v1UUID {
 		concurrentGoroutines <- struct{}{}
@@ -425,9 +427,11 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 			log.Warnf("Missing v1 org %v to the corresponding fs org: %v. Skipping...", uuidString, v2Org.UUID)
 			continue
 		}
+		v1Aliases = append(v1Aliases, v1Org.Aliases...)
 		v1Uuids = append(v1Uuids, v1Org.AlternativeIdentifiers.Uuids...)
 		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)
 	}
+	v2Org.Aliases = append(v2Org.Aliases, v1Aliases...)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
 	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
 	return nil
