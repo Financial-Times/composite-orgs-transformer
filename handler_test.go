@@ -3,29 +3,30 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const knownUUID = "c7e492d9-b8f1-4318-aed8-8103df4e42a9"
 const alternativeUUID = "6a5a939c-e166-4a38-b114-23fcd6cb1cf1"
 
 type mockOrgsService struct {
-	canonicalUuid    string
-	nonCanonicalUuid string
+	canonicalUUID    string
+	nonCanonicalUUID string
 	isFound          bool
 	actualUUID       string
 	err              error
 	organisation     combinedOrg
 }
 
-type mockHttpClient struct {
+type mockHTTPClient struct {
 }
 
-func (httpClient mockHttpClient) Get(url string) (resp *http.Response, err error) {
+func (httpClient mockHTTPClient) Get(url string) (resp *http.Response, err error) {
 	r := http.Response{}
 	r.Body = ioutil.NopCloser(bytes.NewReader([]byte("foo")))
 	r.StatusCode = http.StatusOK
@@ -36,14 +37,14 @@ type test struct {
 	name            string
 	req             *http.Request
 	mockOrgsService orgsService
-	mockHttpClient  httpClient
+	mockHTTPClient  httpClient
 	statusCode      int
 	body            string
 	headers         map[string]string
 }
 
 func (service mockOrgsService) getOrgByUUID(uuid string) (organisation combinedOrg, found bool, err error) {
-	returnOrg := combinedOrg{UUID: service.canonicalUuid, AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{service.canonicalUuid, service.nonCanonicalUuid}}}
+	returnOrg := combinedOrg{UUID: service.canonicalUUID, AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{service.canonicalUUID, service.nonCanonicalUUID}}}
 	service.actualUUID = uuid
 	return returnOrg, service.isFound, service.err
 }
@@ -69,22 +70,22 @@ func TestGetHandler(t *testing.T) {
 	tests := []test{
 		{"Success",
 			newRequest("GET", fmt.Sprintf("/transformers/organisations/%s", knownUUID), "application/json", nil),
-			mockOrgsService{isFound: true, canonicalUuid: knownUUID, nonCanonicalUuid: alternativeUUID},
-			mockHttpClient{},
+			mockOrgsService{isFound: true, canonicalUUID: knownUUID, nonCanonicalUUID: alternativeUUID},
+			mockHTTPClient{},
 			http.StatusOK,
 			`{"uuid":"c7e492d9-b8f1-4318-aed8-8103df4e42a9", "type":"", "properName":"", "prefLabel":"", "alternativeIdentifiers":{"uuids":["c7e492d9-b8f1-4318-aed8-8103df4e42a9", "6a5a939c-e166-4a38-b114-23fcd6cb1cf1"]}}`,
 			map[string]string{"Content-Type": "application/json"}},
 		{"Redirect",
 			newRequest("GET", fmt.Sprintf("/transformers/organisations/%s", alternativeUUID), "application/json", nil),
-			mockOrgsService{isFound: true, canonicalUuid: knownUUID, nonCanonicalUuid: alternativeUUID},
-			mockHttpClient{},
+			mockOrgsService{isFound: true, canonicalUUID: knownUUID, nonCanonicalUUID: alternativeUUID},
+			mockHTTPClient{},
 			http.StatusMovedPermanently,
 			"",
 			map[string]string{"Location": "/transformers/organisations/c7e492d9-b8f1-4318-aed8-8103df4e42a9"}},
 		{"Not Found",
 			newRequest("GET", fmt.Sprintf("/transformers/organisations/%s", "9999"), "application/json", nil),
 			mockOrgsService{isFound: false},
-			mockHttpClient{},
+			mockHTTPClient{},
 			http.StatusNotFound,
 			"",
 			nil},
@@ -95,7 +96,7 @@ func TestGetHandler(t *testing.T) {
 
 		router(orgsHandler{
 			test.mockOrgsService,
-			test.mockHttpClient,
+			test.mockHTTPClient,
 			"http://v1-transformer/transformers/organisations",
 			"http://v2-transformer/transformers/organisations",
 			"/transformers/organisations/"}).ServeHTTP(rec, test.req)

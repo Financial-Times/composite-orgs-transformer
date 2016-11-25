@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Financial-Times/go-fthealth/v1a"
-	log "github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/Financial-Times/go-fthealth/v1a"
+	log "github.com/Sirupsen/logrus"
+	"github.com/gorilla/mux"
 )
 
 type orgsHandler struct {
