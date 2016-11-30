@@ -431,10 +431,23 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 		v1Uuids = append(v1Uuids, v1Org.AlternativeIdentifiers.Uuids...)
 		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)
 	}
-	v2Org.Aliases = append(v2Org.Aliases, v1Aliases...)
+	finalAliases := append(v2Org.Aliases, v1Aliases...)
+	v2Org.Aliases = deDuplicate(finalAliases)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
 	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
 	return nil
+}
+
+func deDuplicate(slice []string) []string {
+	sliceMap := make(map[string]bool)
+	for _, v := range slice {
+		sliceMap[v] = true
+	}
+	newSlice := []string{}
+	for k := range sliceMap {
+		newSlice = append(newSlice, k)
+	}
+	return newSlice
 }
 
 func (s *orgServiceImpl) checkConnectivity() error {
