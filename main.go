@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -171,7 +170,6 @@ func router(hh orgsHandler) http.Handler {
 func newResilientClient() *pester.Client {
 	tr := &http.Transport{
 		MaxIdleConnsPerHost: 128,
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 		Dial: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
