@@ -265,11 +265,11 @@ func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *
 				return err
 			}
 			if combinedOrgResult.AlternativeIdentifiers.Uuids != nil && len(combinedOrgResult.AlternativeIdentifiers.Uuids) > 0 {
-				for _, alternativeUuid := range combinedOrgResult.AlternativeIdentifiers.Uuids {
-					if alternativeUuid == combinedOrgResult.UUID {
+				for _, alternativeUUID := range combinedOrgResult.AlternativeIdentifiers.Uuids {
+					if alternativeUUID == combinedOrgResult.UUID {
 						continue
 					}
-					err = bucket.Put([]byte(alternativeUuid), marshalledCombinedOrg)
+					err = bucket.Put([]byte(alternativeUUID), marshalledCombinedOrg)
 					if err != nil {
 						return err
 					}

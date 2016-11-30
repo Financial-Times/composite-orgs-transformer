@@ -4,18 +4,19 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/Financial-Times/go-fthealth/v1a"
-	status "github.com/Financial-Times/service-status-go/httphandlers"
-	log "github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
-	"github.com/jawher/mow.cli"
-	"github.com/sethgrid/pester"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/Financial-Times/go-fthealth/v1a"
+	status "github.com/Financial-Times/service-status-go/httphandlers"
+	log "github.com/Sirupsen/logrus"
+	"github.com/gorilla/mux"
+	"github.com/jawher/mow.cli"
+	"github.com/sethgrid/pester"
 )
 
 type concorder interface {
@@ -65,7 +66,7 @@ func main() {
 		EnvVar: "BERTHA_URL",
 	})
 
-	redirectLocationUrl := app.String(cli.StringOpt{
+	redirectLocationURL := app.String(cli.StringOpt{
 		Name:   "redirect-base-url",
 		Value:  "/transformers/organisations/",
 		Desc:   "Redirect url",
@@ -73,7 +74,7 @@ func main() {
 	})
 
 	app.Action = func() {
-		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL, *redirectLocationUrl); err != nil {
+		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL, *redirectLocationURL); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("Started app")
