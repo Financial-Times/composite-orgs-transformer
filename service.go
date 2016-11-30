@@ -432,20 +432,20 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)
 	}
 	finalAliases := append(v2Org.Aliases, v1Aliases...)
-	v2Org.Aliases = deDuplicate(finalAliases)
+	v2Org.Aliases = removeDuplicates(finalAliases)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
 	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
 	return nil
 }
 
-func deDuplicate(slice []string) []string {
-	sliceMap := make(map[string]bool)
-	for _, v := range slice {
-		sliceMap[v] = true
-	}
+func removeDuplicates(slice []string) []string {
 	newSlice := []string{}
-	for k := range sliceMap {
-		newSlice = append(newSlice, k)
+	seen := make(map[string]bool)
+	for _, v := range slice {
+		if _, ok := seen[v]; !ok {
+			newSlice = append(newSlice, v)
+			seen[v] = true
+		}
 	}
 	return newSlice
 }
