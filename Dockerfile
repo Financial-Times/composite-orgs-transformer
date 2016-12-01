@@ -2,9 +2,8 @@ FROM alpine:3.4
 
 ADD . /composite-orgs-transformer/
 
-RUN apk add --update bash \
-  && apk --update add git bzr \
-  && apk --update add go \
+RUN apk --no-cache add bash ca-certificates\
+  && apk --no-cache --virtual .build-dependencies add git bzr go \
   && cd composite-orgs-transformer \
   && git fetch origin 'refs/tags/*:refs/tags/*' \
   && BUILDINFO_PACKAGE="github.com/Financial-Times/service-status-go/buildinfo." \
@@ -26,6 +25,6 @@ RUN apk add --update bash \
   && go build -ldflags="${LDFLAGS}" \
   && rm -rf /composite-orgs-transformer \
   && mv composite-orgs-transformer /composite-orgs-transformer \
-  && apk del go git bzr \
+  && apk del .build-dependencies \
   && rm -rf $GOPATH /var/cache/apk/*
 CMD [ "/composite-orgs-transformer" ]

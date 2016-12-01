@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/boltdb/bolt"
 	"regexp"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/boltdb/bolt"
 )
 
 const (
@@ -264,11 +265,11 @@ func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *
 				return err
 			}
 			if combinedOrgResult.AlternativeIdentifiers.Uuids != nil && len(combinedOrgResult.AlternativeIdentifiers.Uuids) > 0 {
-				for _, alternativeUuid := range combinedOrgResult.AlternativeIdentifiers.Uuids {
-					if alternativeUuid == combinedOrgResult.UUID {
+				for _, alternativeUUID := range combinedOrgResult.AlternativeIdentifiers.Uuids {
+					if alternativeUUID == combinedOrgResult.UUID {
 						continue
 					}
-					err = bucket.Put([]byte(alternativeUuid), marshalledCombinedOrg)
+					err = bucket.Put([]byte(alternativeUUID), marshalledCombinedOrg)
 					if err != nil {
 						return err
 					}
@@ -413,6 +414,7 @@ func (s *orgServiceImpl) mergeOrgs(fsOrgUUID string, v1UUID map[string]struct{},
 func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]struct{}, concurrentGoroutines chan struct{}) error {
 	var v1Uuids []string
 	var tmeIdentifiers []string
+	var v1Aliases []string
 
 	for uuidString := range v1UUID {
 		concurrentGoroutines <- struct{}{}
@@ -425,12 +427,27 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 			log.Warnf("Missing v1 org %v to the corresponding fs org: %v. Skipping...", uuidString, v2Org.UUID)
 			continue
 		}
+		v1Aliases = append(v1Aliases, v1Org.Aliases...)
 		v1Uuids = append(v1Uuids, v1Org.AlternativeIdentifiers.Uuids...)
 		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)
 	}
+	finalAliases := append(v2Org.Aliases, v1Aliases...)
+	v2Org.Aliases = removeDuplicates(finalAliases)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
 	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
 	return nil
+}
+
+func removeDuplicates(slice []string) []string {
+	newSlice := []string{}
+	seen := make(map[string]bool)
+	for _, v := range slice {
+		if _, ok := seen[v]; !ok {
+			newSlice = append(newSlice, v)
+			seen[v] = true
+		}
+	}
+	return newSlice
 }
 
 func (s *orgServiceImpl) checkConnectivity() error {
