@@ -23,8 +23,12 @@ const (
 	concV2UUID    = "9eb50f88-5b6e-33f9-a3f7-30e2f3f6cc4e"
 	canonicalUUID = concV1UUID2
 
-	orgType = "Organisation"
+	primaryTypeOrg = "Organisation"
+	primaryTypePub = "PublicCompany"
 )
+
+var orgTypes = []string{"Thing", "Concept", "Organisation"}
+var pubTypes = []string{"Thing", "Concept", "Organisation", "Company", "PublicCompany"}
 
 type ByID []idEntry
 
@@ -39,7 +43,11 @@ func (s ByID) Less(i, j int) bool {
 }
 
 func TestGetOrganisations(t *testing.T) {
+	getOrganisations(t, primaryTypeOrg, orgTypes)
+	getOrganisations(t, primaryTypePub, pubTypes)
+}
 
+func getOrganisations(t *testing.T, primaryType string, typeHierarchy []string) {
 	con := &mockBerthaConcorder{
 		uuidV1toUUIDV2: map[string]string{concV1UUID1: concV2UUID, concV1UUID2: concV2UUID},
 		uuidV2toUUIDV1: map[string]map[string]struct{}{concV2UUID: map[string]struct{}{concV1UUID1: struct{}{}, concV1UUID2: struct{}{}}},
@@ -47,33 +55,38 @@ func TestGetOrganisations(t *testing.T) {
 
 	repo := &mockOrgsRepo{v1Orgs: map[string]combinedOrg{
 		v1TransURL + "/" + v1UUID: combinedOrg{
-			UUID:       v1UUID,
-			ProperName: "V1 Name 1",
-			Type:       orgType,
+			UUID:                   v1UUID,
+			ProperName:             "V1 Name 1",
+			PrimaryType:            primaryTypeOrg,
+			TypeHierarchy:          orgTypes,
 			AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{v1UUID}, TME: []string{v1UUID + "base64"}},
 		},
 		v1TransURL + "/" + concV1UUID1: combinedOrg{
-			UUID:       concV1UUID1,
-			ProperName: "Conc V1 Name 1",
-			Type:       orgType,
+			UUID:                   concV1UUID1,
+			ProperName:             "Conc V1 Name 1",
+			PrimaryType:            primaryTypeOrg,
+			TypeHierarchy:          orgTypes,
 			AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{concV1UUID1}, TME: []string{concV1UUID1 + "base64"}},
 		},
 		v1TransURL + "/" + concV1UUID2: combinedOrg{
-			UUID:       concV1UUID2,
-			ProperName: "Conc V1 Name 2",
-			Type:       orgType,
+			UUID:                   concV1UUID2,
+			ProperName:             "Conc V1 Name 2",
+			PrimaryType:            primaryTypeOrg,
+			TypeHierarchy:          orgTypes,
 			AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{concV1UUID2}, TME: []string{concV1UUID2 + "base64"}},
 		},
 	},
 		v2Orgs: map[string]combinedOrg{
 			v2TransURL + "/" + v2UUID: combinedOrg{
-				UUID: v2UUID,
-				Type: orgType,
+				UUID:                   v2UUID,
+				PrimaryType:            primaryTypeOrg,
+				TypeHierarchy:          orgTypes,
 				AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{v2UUID}, FactsetIdentifier: v2UUID + "base64"},
 			},
 			v2TransURL + "/" + concV2UUID: combinedOrg{
-				UUID: concV1UUID2,
-				Type: orgType,
+				UUID:                   concV1UUID2,
+				PrimaryType:            primaryType,
+				TypeHierarchy:          typeHierarchy,
 				AlternativeIdentifiers: alternativeIdentifiers{Uuids: []string{concV2UUID}, FactsetIdentifier: concV2UUID + "base64"},
 			},
 		}}
@@ -126,8 +139,9 @@ func TestGetOrganisations(t *testing.T) {
 		sort.Strings(concordedOrg.AlternativeIdentifiers.Uuids)
 		sort.Strings(concordedOrg.AlternativeIdentifiers.TME)
 		assert.EqualValues(t, combinedOrg{
-			UUID: canonicalUUID,
-			Type: orgType,
+			UUID:          canonicalUUID,
+			PrimaryType:   primaryType,
+			TypeHierarchy: typeHierarchy,
 			AlternativeIdentifiers: alternativeIdentifiers{
 				FactsetIdentifier: concV2UUID + "base64",
 				TME:               []string{concV1UUID2 + "base64", concV1UUID1 + "base64"},
