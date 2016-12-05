@@ -216,7 +216,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 			s.list = append(s.list, combinedOrgResult.UUID)
 
 			//save to cache only concorded orgs. For non concorded orgs combinedOrgResult will only contain UUID
-			if combinedOrgResult.Type != "" {
+			if combinedOrgResult.PrimaryType != "" {
 				combinedOrgCache[combinedOrgResult.UUID] = combinedOrgResult
 			}
 

@@ -73,7 +73,7 @@ func TestGetHandler(t *testing.T) {
 			mockOrgsService{isFound: true, canonicalUUID: knownUUID, nonCanonicalUUID: alternativeUUID},
 			mockHTTPClient{},
 			http.StatusOK,
-			`{"uuid":"c7e492d9-b8f1-4318-aed8-8103df4e42a9", "type":"", "properName":"", "prefLabel":"", "alternativeIdentifiers":{"uuids":["c7e492d9-b8f1-4318-aed8-8103df4e42a9", "6a5a939c-e166-4a38-b114-23fcd6cb1cf1"]}}`,
+			`{"uuid":"c7e492d9-b8f1-4318-aed8-8103df4e42a9", "type":"", "types":null, "properName":"", "prefLabel":"", "alternativeIdentifiers":{"uuids":["c7e492d9-b8f1-4318-aed8-8103df4e42a9", "6a5a939c-e166-4a38-b114-23fcd6cb1cf1"]}}`,
 			map[string]string{"Content-Type": "application/json"}},
 		{"Redirect",
 			newRequest("GET", fmt.Sprintf("/transformers/organisations/%s", alternativeUUID), "application/json", nil),

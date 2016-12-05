@@ -2,7 +2,8 @@ package main
 
 type combinedOrg struct {
 	UUID                   string                 `json:"uuid"`
-	Type                   string                 `json:"type"`
+	PrimaryType            string                 `json:"type"`
+	TypeHierarchy          []string               `json:"types"`
 	ProperName             string                 `json:"properName"`
 	PrefLabel              string                 `json:"prefLabel"`
 	LegalName              string                 `json:"legalName,omitempty"`
