@@ -430,11 +430,16 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 		v1Aliases = append(v1Aliases, v1Org.Aliases...)
 		v1Uuids = append(v1Uuids, v1Org.AlternativeIdentifiers.Uuids...)
 		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)
+
+		// We need to fix which preflabel we choose when we move to smart logic - This code is being decommed therefore I think this is acceptable
+		v2Org.PrefLabel = v1Org.PrefLabel
 	}
+
 	finalAliases := append(v2Org.Aliases, v1Aliases...)
 	v2Org.Aliases = removeDuplicates(finalAliases)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
 	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
+
 	return nil
 }
 
