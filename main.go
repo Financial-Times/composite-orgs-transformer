@@ -160,7 +160,7 @@ func router(hh orgsHandler) http.Handler {
 	servicesRouter.HandleFunc("/__health", v1a.Handler("Composite Org Transformer Healthchecks", "Checks for the health of the service", hh.HealthCheck()))
 	servicesRouter.HandleFunc("/__gtg", hh.GoodToGo)
 
-	servicesRouter.HandleFunc("/transformers/organisations/{uuid:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", hh.getOrgByUUID).Methods("GET")
+	servicesRouter.HandleFunc("/transformers/organisations/{uuid:(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})}", hh.getOrgByUUID).Methods("GET")
 	servicesRouter.HandleFunc("/transformers/organisations/__count", hh.count).Methods("GET")
 	servicesRouter.HandleFunc("/transformers/organisations/__ids", hh.getAllOrgs).Methods("GET")
 
