@@ -19,9 +19,7 @@ RUN apk --no-cache add bash ca-certificates\
   && mkdir -p $GOPATH/src/${REPO_PATH} \
   && cp -r composite-orgs-transformer/* $GOPATH/src/${REPO_PATH} \
   && cd $GOPATH/src/${REPO_PATH} \
-  && echo "Fetching dependencies..." \
-  && go get -u github.com/kardianos/govendor \
-  && $GOPATH/bin/govendor sync \
+  && go get -t ./... \
   && cd $GOPATH/src/${REPO_PATH} \
   && echo ${LDFLAGS} \
   && go build -ldflags="${LDFLAGS}" \
