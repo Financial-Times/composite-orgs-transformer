@@ -415,6 +415,7 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 	var v1Uuids []string
 	var tmeIdentifiers []string
 	var v1Aliases []string
+	var v1PrefLabels []string
 
 	for uuidString := range v1UUID {
 		concurrentGoroutines <- struct{}{}
@@ -432,9 +433,9 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 		tmeIdentifiers = append(tmeIdentifiers, v1Org.AlternativeIdentifiers.TME...)
 
 		// We need to fix which preflabel we choose when we move to smart logic - This code is being decommed therefore I think this is acceptable
-		v2Org.PrefLabel = v1Org.PrefLabel
+		v1PrefLabels = append(v1PrefLabels, v1Org.PrefLabel)
 	}
-
+	v2Org.PrefLabel, _ = canonicalFromList(v1PrefLabels)
 	finalAliases := append(v2Org.Aliases, v1Aliases...)
 	v2Org.Aliases = removeDuplicates(finalAliases)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
