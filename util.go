@@ -17,3 +17,13 @@ func canonical(uuids ...string) (c string, index int) {
 	}
 	return
 }
+
+func canonicalFromList(uuids []string) (c string, index int) {
+	for idx, s := range uuids {
+		if c == "" || s < c {
+			c = s
+			index = idx
+		}
+	}
+	return
+}
