@@ -438,9 +438,11 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 	}
 	// Log all the options for preflabel when we are changing the preflabel
 	prefLabel, _ := canonicalFromList(v1PrefLabels)
+
 	if (len(v1Uuids) > 1 && prefLabel != v2Org.PrefLabel) {
-		log.Infof("Multiple TME mappings have been found. Preflabel choice: [%v] from [%v]. Factset prefLabel: [%v]", prefLabel, strings.Join(v1PrefLabels, ", "), v2Org.PrefLabel)
+		log.WithFields(log.Fields{"V2UUID": v2Org.UUID, "CanonicalLabel": prefLabel, "AvailableTmeLabels": strings.Join(v1PrefLabels, ", "), "FactsetPrefLabel": v2Org.PrefLabel}).Infof("Multiple TME mappings to a Factset id and the Canonical PrefLabel is different from Factset")
 	}
+
 	v2Org.PrefLabel = prefLabel
 	finalAliases := append(v2Org.Aliases, v1Aliases...)
 	v2Org.Aliases = removeDuplicates(finalAliases)
