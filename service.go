@@ -12,6 +12,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
+	"strings"
 )
 
 const (
@@ -438,7 +439,7 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 	// Log all the options for preflabel when we are changing the preflabel
 	prefLabel, _ := canonicalFromList(v1PrefLabels)
 	if (len(v1Uuids) > 1 && prefLabel != v2Org.PrefLabel) {
-		log.Infof("Multiple TME mappings have been found. Preflabel choice: [%v] from [%v]. Factset prefLabel: [%v]", prefLabel, v1PrefLabels, v2Org.PrefLabel)
+		log.Infof("Multiple TME mappings have been found. Preflabel choice: [%v] from [%v]. Factset prefLabel: [%v]", prefLabel, strings.Join(v1PrefLabels, ", "), v2Org.PrefLabel)
 	}
 	v2Org.PrefLabel = prefLabel
 	finalAliases := append(v2Org.Aliases, v1Aliases...)
