@@ -435,7 +435,12 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 		// We need to fix which preflabel we choose when we move to smart logic - This code is being decommed therefore I think this is acceptable
 		v1PrefLabels = append(v1PrefLabels, v1Org.PrefLabel)
 	}
-	v2Org.PrefLabel, _ = canonicalFromList(v1PrefLabels)
+	// Log all the options for preflabel when we are changing the preflabel
+	prefLabel, _ := canonicalFromList(v1PrefLabels)
+	if (len(v1Uuids) > 1 && prefLabel != v2Org.PrefLabel) {
+		log.Infof("Multiple TME mappings have been found. Preflabel choice: [%v] from [%v]. Factset prefLabel: [%v]", prefLabel, v1PrefLabels, v2Org.PrefLabel)
+	}
+	v2Org.PrefLabel = prefLabel
 	finalAliases := append(v2Org.Aliases, v1Aliases...)
 	v2Org.Aliases = removeDuplicates(finalAliases)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
