@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/sethgrid/pester"
+	"go/format"
 )
 
 type concorder interface {
@@ -30,6 +31,7 @@ type httpClient interface {
 
 func init() {
 	log.SetLevel(log.DebugLevel)
+	log.SetFormatter(&log.JSONFormatter{})
 }
 
 func main() {
