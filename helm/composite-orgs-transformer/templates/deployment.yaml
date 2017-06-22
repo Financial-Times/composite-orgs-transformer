@@ -1,0 +1,56 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Values.service.name }} 
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}" 
+    visualize: "true" 
+    app: {{ .Values.service.name }} 
+spec:
+  replicas: {{ .Values.replicaCount }} 
+  selector: 
+    matchLabels:
+      app: {{ .Values.service.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.service.name }}
+        visualize: "true" 
+    spec:
+      containers: 
+      - name: {{ .Chart.Name }} 
+        image: "{{ .Values.image.repository }}:{{ required "Please provide a valid docker image version by adding the argument at install '--set image.version=...'" .Values.image.version }}" 
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env: 
+        - name: PORT
+          value: "8080"
+        - name: V1_TRANSFORMER_URL
+          value: "http://v1-orgs-transformer:8080/transformers/organisations"
+        - name: FS_TRANSFORMER_URL
+          value: "https://v2-organisations-transformer-up.ft.com/transformers/organisations"
+        - name: REDIRECT_BASE_URL
+          value: "/__composite-orgs-transformer/transformers/organisations/"
+        - name: CACHE_FILE_NAME
+          value: "/cache/composite-orgs-transformer.db"
+        volumeMounts:
+        - name: composite-orgs-transformer-cache
+          mountPath: /cache
+        ports: 
+        - containerPort: 8080 
+        livenessProbe: 
+          tcpSocket: 
+            port: 8080 
+          initialDelaySeconds: 10 
+        readinessProbe: 
+          httpGet: 
+            path: "/__gtg" 
+            port: 8080 
+          initialDelaySeconds: 15 
+          periodSeconds: 30
+        resources: 
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+      - name: composite-orgs-transformer-cache
+        persistentVolumeClaim:
+          claimName: transformers-cache-pvc
+
