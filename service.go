@@ -438,18 +438,19 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 	}
 	// Log all the options for preflabel when we are changing the preflabel
 	prefLabel, _ := canonicalFromList(v1PrefLabels)
-	can, _ := canonical(v2Org.AlternativeIdentifiers.Uuids...)
-	if (len(v1PrefLabels) > 1) {
-		log.WithFields(log.Fields{"UUID": can, "CanonicalLabel": prefLabel, "AvailableTmeLabels": strings.Join(v1PrefLabels, ", "), "FactsetPrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Infof("Multiple TME mappings to a Factset id and the Canonical PrefLabel is different from Factset")
-	} else if (prefLabel != v2Org.PrefLabel){
-		log.WithFields(log.Fields{"UUID": can, "CanonicalLabel": prefLabel, "TMELabel":strings.Join(v1PrefLabels, ", "), "Factset PrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Info("Different preflabels in Factset to TME, therefore preferring TME")
-	}
 
 	v2Org.PrefLabel = prefLabel
 	finalAliases := append(v2Org.Aliases, v1Aliases...)
 	v2Org.Aliases = removeDuplicates(finalAliases)
 	v2Org.AlternativeIdentifiers.TME = tmeIdentifiers
 	v2Org.AlternativeIdentifiers.Uuids = append(v2Org.AlternativeIdentifiers.Uuids, v1Uuids...)
+
+	can, _ := canonical(v2Org.AlternativeIdentifiers.Uuids...)
+	if (len(v1PrefLabels) > 1) {
+		log.WithFields(log.Fields{"UUID": can, "CanonicalLabel": prefLabel, "AvailableTmeLabels": strings.Join(v1PrefLabels, ", "), "FactsetPrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Infof("Multiple TME mappings to a Factset id and the Canonical PrefLabel is different from Factset")
+	} else if (prefLabel != v2Org.PrefLabel){
+		log.WithFields(log.Fields{"UUID": can, "CanonicalLabel": prefLabel, "TMELabel":strings.Join(v1PrefLabels, ", "), "Factset PrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Info("Different preflabels in Factset to TME, therefore preferring TME")
+	}
 
 	return nil
 }
