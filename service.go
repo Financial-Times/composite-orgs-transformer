@@ -440,9 +440,9 @@ func (s *orgServiceImpl) mergeIdentifiers(v2Org *combinedOrg, v1UUID map[string]
 	prefLabel, _ := canonicalFromList(v1PrefLabels)
 
 	if (len(v1PrefLabels) > 1) {
-		log.WithFields(log.Fields{"UUID": v2Org.UUID, "CanonicalLabel": prefLabel, "AvailableTmeLabels": strings.Join(v1PrefLabels, ", "), "FactsetPrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Infof("Multiple TME mappings to a Factset id and the Canonical PrefLabel is different from Factset")
+		log.WithFields(log.Fields{"UUID": canonical(v2Org.AlternativeIdentifiers.Uuids...), "CanonicalLabel": prefLabel, "AvailableTmeLabels": strings.Join(v1PrefLabels, ", "), "FactsetPrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Infof("Multiple TME mappings to a Factset id and the Canonical PrefLabel is different from Factset")
 	} else if (prefLabel != v2Org.PrefLabel){
-		log.WithFields(log.Fields{"UUID": v2Org.UUID, "CanonicalLabel": prefLabel, "TMELabel":strings.Join(v1PrefLabels, ", "), "Factset PrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Info("Different preflabels in Factset to TME, therefore preferring TME")
+		log.WithFields(log.Fields{"UUID": canonical(v2Org.AlternativeIdentifiers.Uuids...), "CanonicalLabel": prefLabel, "TMELabel":strings.Join(v1PrefLabels, ", "), "Factset PrefLabel": v2Org.PrefLabel, "TMEIdentifiers": strings.Join(tmeIdentifiers, ", ")}).Info("Different preflabels in Factset to TME, therefore preferring TME")
 	}
 
 	v2Org.PrefLabel = prefLabel
