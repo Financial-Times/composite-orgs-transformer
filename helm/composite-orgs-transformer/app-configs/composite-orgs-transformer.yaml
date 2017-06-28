@@ -2,3 +2,8 @@
 replicaCount: 1
 service:
   name: composite-orgs-transformer
+persistent:
+  efs: fs-6330fcaa.efs.eu-west-1.amazonaws.com
+  capacity: 5Gi
+env:
+  FS_TRANSFORMER_URL: "https://v2-organisations-transformer-up.ft.com/transformers/organisations"

@@ -1,0 +1,26 @@
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: {{ .Values.service.name }}-pv
+spec:
+  capacity:
+    storage: {{ .Values.persistent.capacity }}
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: {{ .Values.persistent.efs }}
+    path: "/"
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ .Values.service.name }}-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ .Values.persistent.capacity }}
+    

@@ -11,3 +11,8 @@ image:
 resources:
   limits:
     memory: 4Gi
+persistent:
+  efs: "" # This should be defined in the specific app-configs folder
+  capacity: 5Gi
+env:
+  FS_TRANSFORMER_URL: "" # This should be defined in the specific app-configs folder
