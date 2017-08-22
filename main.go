@@ -30,6 +30,7 @@ type httpClient interface {
 
 func init() {
 	log.SetLevel(log.DebugLevel)
+	log.SetFormatter(&log.JSONFormatter{})
 }
 
 func main() {
