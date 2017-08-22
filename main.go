@@ -78,7 +78,7 @@ func main() {
 	log.SetFormatter(&log.JSONFormatter{})
 	lvl, err := log.ParseLevel(*logLevel)
 	if err != nil {
-		log.Warnf("Log level %s could not be parsed, defaulting to info")
+		log.Warnf("Log level %s could not be parsed, defaulting to info", *logLevel)
 		lvl = log.InfoLevel
 	}
 	log.SetLevel(lvl)
