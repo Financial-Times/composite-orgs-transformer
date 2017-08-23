@@ -198,13 +198,13 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 			return err
 		case combinedOrgResult, ok := <-combineOrgChan:
 			if !ok {
-				log.Debug("Almost done. Waiting for subroutines to terminate")
+				log.Infof("Almost done. Waiting for subroutines to terminate")
 				storeOrgToCache(db, combinedOrgCache, nil, errs)
 				wg.Wait()
 				for k := range combinedOrgCache {
 					delete(combinedOrgCache, k)
 				}
-				log.Debugf("Finished composite org load: %v values", len(s.list))
+				log.Infof("Finished composite org load: %v values", len(s.list))
 				s.c = len(s.list)
 				return nil
 			}
@@ -212,7 +212,7 @@ func (s *orgServiceImpl) loadCombinedOrgs(db *bolt.DB) error {
 				break
 			}
 			if len(s.list)%100000 == 1 {
-				log.Debugf("Progress: %v", len(s.list))
+				log.Infof("Progress: %v", len(s.list))
 			}
 			s.list = append(s.list, combinedOrgResult.UUID)
 
@@ -241,12 +241,12 @@ func storeOrgToCache(db *bolt.DB, cacheToBeWritten map[string]*combinedOrg, wg *
 	start := time.Now()
 	if wg != nil {
 		defer func(startTime time.Time) {
-			log.Debugf("Done, elapsed time: %+v, size: %v\n", time.Since(startTime), len(cacheToBeWritten))
+			log.Infof("Done, elapsed time: %+v, size: %v\n", time.Since(startTime), len(cacheToBeWritten))
 			wg.Done()
 		}(start)
 	} else {
 		defer func(startTime time.Time) {
-			log.Debugf("Done, elapsed time: %+v, size: %v\n", time.Since(startTime), len(cacheToBeWritten))
+			log.Infof("Done, elapsed time: %+v, size: %v\n", time.Since(startTime), len(cacheToBeWritten))
 		}(start)
 	}
 
