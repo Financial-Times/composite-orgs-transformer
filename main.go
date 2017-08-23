@@ -28,10 +28,6 @@ type httpClient interface {
 	Get(url string) (resp *http.Response, err error)
 }
 
-func init() {
-	log.SetLevel(log.DebugLevel)
-	log.SetFormatter(&log.JSONFormatter{})
-}
 
 func main() {
 	app := cli.App("composite-organisations-transformer", "A RESTful API for transforming combined organisations")
@@ -72,6 +68,21 @@ func main() {
 		Desc:   "Redirect url",
 		EnvVar: "REDIRECT_BASE_URL",
 	})
+
+	logLevel := app.String(cli.StringOpt{
+		Name:   "logLevel",
+		Desc:   "Level of logging to be shown",
+		EnvVar: "LOG_LEVEL",
+	})
+
+	log.SetFormatter(&log.JSONFormatter{})
+	lvl, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Warnf("Log level %s could not be parsed, defaulting to info", *logLevel)
+		lvl = log.InfoLevel
+	}
+	log.SetLevel(lvl)
+	log.Info(lvl.String() + ": log level set")
 
 	app.Action = func() {
 		if err := runApp(*v1URL, *fsURL, *port, *cacheFileName, *berthaURL, *redirectLocationURL); err != nil {
