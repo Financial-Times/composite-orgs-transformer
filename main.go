@@ -12,7 +12,7 @@ import (
 
 	"github.com/Financial-Times/go-fthealth/v1a"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
 	"github.com/sethgrid/pester"
