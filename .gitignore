@@ -1,5 +1,4 @@
-composite-orgs-transformer
-*.exe*
+/composite-orgs-transformer*
 *.html
 *coverage.*
 *.iml
