@@ -1,0 +1,9 @@
+# Values used for the deployed application.
+replicaCount: 1
+service:
+  name: composite-orgs-transformer
+persistent:
+  efs: fs-a468c96d.efs.eu-west-1.amazonaws.com
+  capacity: 5Gi
+env:
+  FS_TRANSFORMER_URL: "https://v2-organisations-transformer-up.ft.com/transformers/organisations"
