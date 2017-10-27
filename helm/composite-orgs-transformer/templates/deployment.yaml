@@ -53,5 +53,5 @@ spec:
       volumes:
       - name: composite-orgs-transformer-cache
         persistentVolumeClaim:
-          claimName: {{ .Values.service.name }}-pvc
+          claimName: {{ .Values.service.name }}-cache-pvc
 
