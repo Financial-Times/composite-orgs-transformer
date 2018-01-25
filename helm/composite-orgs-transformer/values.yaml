@@ -8,8 +8,10 @@ image:
   repository: coco/composite-orgs-transformer
   pullPolicy: IfNotPresent
 resources:
+  requests:
+    memory: 2Gi
   limits:
-    memory: 4Gi
+    memory: 3Gi
 persistent:
   capacity: 5Gi
 env:
