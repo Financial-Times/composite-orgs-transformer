@@ -23,7 +23,7 @@ jobs:
             mkdir -p ${CIRCLE_COVERAGE_REPORT}
       - run:
           name: Go Get
-          command: go get -v
+          command: go get -t -d -v ./...
       - run:
           name: Go Build
           command: go build -v
