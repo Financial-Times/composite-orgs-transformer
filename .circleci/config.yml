@@ -15,7 +15,6 @@ jobs:
           command: |
             go get -u github.com/mattn/goveralls
             go get -u github.com/jstemmer/go-junit-report
-            go get -u github.com/kardianos/govendor
             go get -u github.com/haya14busa/goverage
       - run:
           name: Test Results
@@ -31,7 +30,7 @@ jobs:
       - run:
           name: Run Tests
           command: |
-            govendor test -race -v +local | /go/bin/go-junit-report > ${CIRCLE_TEST_REPORTS}/main.xml
+            go test -race -v +local | /go/bin/go-junit-report > ${CIRCLE_TEST_REPORTS}/main.xml
             goverage -covermode=atomic -race -coverprofile=${CIRCLE_COVERAGE_REPORT}/coverage.out ./...
       - run:
           name: Upload Coverage
