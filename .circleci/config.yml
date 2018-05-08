@@ -3,7 +3,7 @@ jobs:
   build:
     working_directory: /go/src/github.com/Financial-Times/composite-orgs-transformer
     docker:
-      - image: golang:1.8.3
+      - image: golang:1.10
         environment:
           GOPATH: /go
           CIRCLE_TEST_REPORTS: /tmp/test-results
@@ -14,13 +14,14 @@ jobs:
           command: |
             go get -u github.com/mattn/goveralls
             go get -u github.com/jstemmer/go-junit-report
+            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
       - run:
           name: Test Results
           command: |
             mkdir -p ${CIRCLE_TEST_REPORTS}
       - run:
-          name: Go Get
-          command: go get -t -d -v ./...
+          name: Dep Ensure
+          command: dep ensure -vendor-only
       - run:
           name: Go Build
           command: go build -v
