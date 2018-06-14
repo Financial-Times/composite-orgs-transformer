@@ -1,3 +1,6 @@
+*DECOMISSIONED*
+See [Aggregate Concept Transformer](https://github.com/Financial-Times/aggregate-concept-transformer) instead
+
 # Composite Organisations transformer
 [![Circle CI](https://circleci.com/gh/Financial-Times/composite-orgs-transformer/tree/master.png?style=shield)](https://circleci.com/gh/Financial-Times/composite-orgs-transformer/tree/master)
 
